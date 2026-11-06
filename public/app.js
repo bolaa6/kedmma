@@ -40,6 +40,30 @@ function icon(name) {
   wrap.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name]}"/></svg>`;
   return wrap.firstChild;
 }
+function avatar(id, photo, size) {
+  const sz = size || 44;
+  const st = `width:${sz}px;height:${sz}px;font-size:${Math.round(sz * 0.42)}px`;
+  if (photo) return h('img', { class: 'avatar', src: `/api/photo/${id}?v=${encodeURIComponent(photo)}`, alt: '', width: sz, height: sz, style: st, loading: 'lazy' });
+  return h('span', { class: 'avatar', style: st, 'aria-hidden': 'true' }, icon('user'));
+}
+// يقص الصورة مربعة ويصغرها لـ 256px ويحولها JPEG صغيرة
+async function resizePhoto(file) {
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch { throw new Error('الصورة دي مش مدعومة. جرّب صورة JPG أو PNG'); }
+  const S = 256, c = document.createElement('canvas'); c.width = S; c.height = S;
+  const side = Math.min(bmp.width, bmp.height);
+  c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, S, S);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+// زر بخطوتين: الضغطة الأولى تطلب التأكيد، الثانية تنفذ
+function sureButton(label, sureLabel, onConfirm) {
+  const b = h('button', { class: 'btn bad', type: 'button' }, label);
+  b.addEventListener('click', async () => {
+    if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = sureLabel; setTimeout(() => { delete b.dataset.sure; b.textContent = label; }, 5000); return; }
+    await onConfirm();
+  });
+  return b;
+}
 const starIc = () => { const s = icon('star'); s.setAttribute('class', 'star-ic'); return s; };
 
 let toastTimer;
@@ -301,6 +325,21 @@ function kidProfile(main) {
       h('button', { class: 'btn ghost', type: 'button', onclick: () => { p.siblings.push({ name: '', age: '', grade: '' }); drawSibs(); } }, 'إضافة أخ أو أخت'));
   };
   drawSibs();
+  const photoBox = h('div', { class: 'card row' });
+  const drawPhoto = () => {
+    const pick = h('input', { id: 'photo', type: 'file', accept: 'image/*', hidden: true, onchange: async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      try {
+        const data = await resizePhoto(f);
+        const r = await api('PUT', '/api/photo', { data });
+        state.me.profile.photo = r.photo; p.photo = r.photo; toast('تم تغيير صورتك'); drawPhoto();
+      } catch (ex) { toast(ex.message, true); }
+    } });
+    fill(photoBox, avatar(p.id, p.photo, 80),
+      h('div', { class: 'grow stack', style: 'gap:6px' }, h('b', null, 'صورتك'),
+        h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => pick.click() }, p.photo ? 'تغيير الصورة' : 'اختار صورة'), pick));
+  };
+  drawPhoto();
   const err = h('div', { class: 'err', hidden: true, role: 'alert' });
   const form = h('form', { class: 'card stack', novalidate: true, onsubmit: async (e) => {
     e.preventDefault(); err.hidden = true;
@@ -328,7 +367,7 @@ function kidProfile(main) {
     h('p', { class: 'muted small' }, 'تقدر تعدّل بياناتك في أي وقت. مينفعش تتمسح بعد ما تتسجل.'));
   fill(main, 
     !p.complete && h('div', { class: 'notice' }, 'كمّل بياناتك الأول عشان الخدام يقدروا يتواصلوا مع أهلك.'),
-    form, passwordCard(),
+    photoBox, form, passwordCard(),
     h('button', { class: 'btn ghost', type: 'button', onclick: logout }, 'تسجيل الخروج'));
 }
 
@@ -370,7 +409,8 @@ async function staffOverview(main) {
     const q = search.value.trim();
     const rows = r.kids.filter((k) => !q || k.name.includes(q) || k.phone.includes(q));
     fill(tbody, ...rows.map((k) => h('tr', { class: 'click', tabindex: 0, onclick: () => { state.openKid = k.id; renderStaff(); }, onkeydown: (e) => { if (e.key === 'Enter') { state.openKid = k.id; renderStaff(); } } },
-      h('td', null, h('b', null, k.name), !k.complete && h('div', null, h('span', { class: 'pill bad' }, 'بياناته ناقصة'))),
+      h('td', null, h('div', { class: 'row', style: 'flex-wrap:nowrap' }, avatar(k.id, k.photo, 36),
+        h('div', null, h('b', null, k.name), !k.complete && h('div', null, h('span', { class: 'pill bad' }, 'بياناته ناقصة'))))),
       days.map((d) => {
         const rec = k.days[d]; const off = d > r.today;
         return h('td', null, h('span', { class: 'dots' + (off ? ' off' : '') }, h('span', { class: 'dot' + (rec && rec.prayed ? ' on' : ''), title: 'صلاة' }), h('span', { class: 'dot g' + (rec && rec.gospel ? ' on' : ''), title: 'إنجيل' })));
@@ -420,7 +460,7 @@ async function staffKid(main, id) {
   fill(main, 
     h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.openKid = null; renderStaff(); } }, 'رجوع للقائمة'),
     h('div', { class: 'card stack' },
-      h('div', { class: 'row between' }, h('h2', null, p.name), h('span', { class: 'pill star num', style: 'font-size:1rem' }, String(s.total), starIc())),
+      h('div', { class: 'row between' }, h('div', { class: 'row', style: 'flex-wrap:nowrap' }, avatar(p.id, p.photo, 64), h('h2', null, p.name)), h('span', { class: 'pill star num', style: 'font-size:1rem' }, String(s.total), starIc())),
       h('dl', { class: 'kv' },
         h('dt', null, 'موبايل الولد'), h('dd', null, tel(p.phone)),
         h('dt', null, 'موبايل ماما'), h('dd', null, p.mother_phone ? tel(p.mother_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
@@ -456,7 +496,13 @@ async function staffKid(main, id) {
           } }, 'حذف'))))) : h('p', { class: 'muted' }, 'مفيش ملاحظات')),
     state.me.user.role === 'admin' && h('div', { class: 'card stack' }, h('h3', null, 'تغيير كلمة سر الولد'),
       h('div', { class: 'row' }, (pw = h('input', { id: 'kidpw', class: 'ltr grow', placeholder: 'كلمة سر جديدة (6 على الأقل)', 'aria-label': 'كلمة سر جديدة' })),
-        h('button', { class: 'btn', type: 'button', onclick: async () => { const x = await act(() => api('POST', '/api/admin/reset-password', { user_id: id, password: pw.value }), 'تم تغيير كلمة السر'); if (x) pw.value = ''; } }, 'تغيير'))));
+        h('button', { class: 'btn', type: 'button', onclick: async () => { const x = await act(() => api('POST', '/api/admin/reset-password', { user_id: id, password: pw.value }), 'تم تغيير كلمة السر'); if (x) pw.value = ''; } }, 'تغيير'))),
+    state.me.user.role === 'admin' && h('div', { class: 'card stack' }, h('h3', null, 'حذف الحساب'),
+      h('p', { class: 'muted' }, 'بيمسح الحساب وكل بياناته ونجومه وصورته نهائياً، ومينفعش يتراجع عنه.'),
+      sureButton('حذف حساب ' + p.name, 'اضغط تاني للتأكيد النهائي', async () => {
+        const x = await act(() => api('DELETE', `/api/admin/user/${id}`), 'تم حذف الحساب');
+        if (x) { state.openKid = null; renderStaff(); }
+      })));
   window.scrollTo(0, 0);
 }
 
@@ -505,9 +551,10 @@ async function staffTeam(main) {
     h('div', { class: 'card stack' }, h('h3', null, 'الخدام والمتابعين'),
       h('div', { class: 'list' }, r.staff.map((u) => h('div', { class: 'row between' },
         h('div', null, h('b', null, u.name), h('div', { class: 'muted small ltr', style: 'text-align:start' }, u.phone)),
-        u.role === 'admin' ? h('span', { class: 'pill' }, 'مسؤول') :
+        u.role === 'admin' ? h('span', { class: 'pill' }, 'مسؤول') : h('div', { class: 'row' },
+          sureButton('حذف', 'تأكيد الحذف', async () => { const x = await act(() => api('DELETE', `/api/admin/user/${u.id}`), 'تم حذف الحساب'); if (x) renderStaff(); }),
           h('select', { 'aria-label': 'صلاحية ' + u.name, style: 'width:auto', onchange: (e) => act(() => api('PATCH', `/api/admin/staff/${u.id}`, { role: e.target.value }), 'تم تغيير الصلاحية') },
-            h('option', { value: 'viewer', selected: u.role === 'viewer' }, 'متابع'), h('option', { value: 'servant', selected: u.role === 'servant' }, 'خادم')))))),
+            h('option', { value: 'viewer', selected: u.role === 'viewer' }, 'متابع'), h('option', { value: 'servant', selected: u.role === 'servant' }, 'خادم'))))))),
     h('form', { class: 'card stack', onsubmit: async (e) => {
       e.preventDefault();
       const x = await act(() => api('POST', '/api/admin/staff', { name: f.name.value, phone: f.phone.value, password: f.pw.value, role: f.role.value }), 'تمت الإضافة');

@@ -32,6 +32,8 @@ function icon(name) {
     week: 'M7 2h2v2h6V2h2v2h3v18H4V4h3zm-1 7v11h12V9z M8 11h3v3H8z',
     user: 'M12 12a4.5 4.5 0 100-9 4.5 4.5 0 000 9zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z',
     people: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm7 1a3 3 0 100-6 3 3 0 000 6zM9 13c-3.3 0-6 1.8-6 4v2h12v-2c0-2.2-2.7-4-6-4zm7 0c-.6 0-1.2.1-1.7.2 1.1.9 1.7 2.1 1.7 3.8v2h5v-2c0-2-2.2-4-5-4z',
+    cake: 'M12 1.5c.9 1.1.9 2.2 0 3.3-.9-1.1-.9-2.2 0-3.3zM11 6h2v2.5h5A2 2 0 0120 10.5V13c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2v-2.5a2 2 0 012-2h5zM4 16.5h16V21H4z',
+    book: 'M4 4.5C4 4.2 4.2 4 4.5 4H10a3 3 0 013 3v13a2 2 0 00-2-2H4.5a.5.5 0 01-.5-.5zm16 0c0-.3-.2-.5-.5-.5H14a3 3 0 00-3 3v13a2 2 0 012-2h6.5c.3 0 .5-.2.5-.5z',
     trophy: 'M6 2h12v2h3v4c0 2.2-1.8 4-4 4h-.3A5 5 0 0113 15.9V18h3v2H8v-2h3v-2.1A5 5 0 017.3 12H7C4.8 12 3 10.2 3 8V4h3zm0 4H5v2c0 1.1.9 2 2 2zm12 0v4c1.1 0 2-.9 2-2V6z',
     moon: 'M20.5 14.5A8.5 8.5 0 019.5 3.5 8.5 8.5 0 1020.5 14.5z',
     sun: 'M12 7a5 5 0 100 10 5 5 0 000-10zM11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1l1.4-1.4 2.1 2.1-1.4 1.4zM5.6 19.8l-1.4-1.4 2.1-2.1 1.4 1.4zM17.7 7.7l-1.4-1.4 2.1-2.1 1.4 1.4z',
@@ -65,6 +67,12 @@ function sureButton(label, sureLabel, onConfirm) {
   });
   return b;
 }
+function arCount(n, one, two, few, many) { return n === 1 ? `${one}` : n === 2 ? `${two}` : n >= 3 && n <= 10 ? `${n} ${few}` : `${n} ${many}`; }
+const arYears = (n) => arCount(n, 'سنة', 'سنتين', 'سنين', 'سنة');
+const arMonths = (n) => arCount(n, 'شهر', 'شهرين', 'شهور', 'شهر');
+const arDays = (n) => arCount(n, 'يوم', 'يومين', 'أيام', 'يوم');
+const ageText = (b) => arYears(b.age_years) + (b.age_months ? ' و' + arMonths(b.age_months) : '');
+const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
 const starIc = () => { const s = icon('star'); s.setAttribute('class', 'star-ic'); return s; };
 
 let toastTimer;
@@ -205,12 +213,16 @@ function renderKid() {
   const me = state.me;
   if (!state.tab) state.tab = me.profile.complete ? 'week' : 'profile';
   const main = h('main', { class: 'wrap stack' });
-  const tabs = [['week', 'أسبوعي', 'week'], ['quiz', 'المسابقة', 'trophy'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
+  const tabs = [['week', 'أسبوعي', 'week'], ['quiz', 'المسابقة', 'trophy'], ['library', 'المكتبة', 'book'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
   const bar = h('nav', { class: 'tabbar', 'aria-label': 'التنقل' }, tabs.map(([id, label, ic]) =>
     h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.openContest = null; renderKid(); } }, icon(ic), label)));
-  fill(app, h('div', { class: 'wrap' }, header(me.user.name)), main, bar);
+  const bd = me.birthday;
+  const greet = bd && bd.is_today ? h('div', { class: 'bday-card' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic'); return c; })(),
+    h('div', null, h('b', null, `كل سنة وإنت طيب يا ${firstName(me.user.name)}`), h('p', null, `النهارده عيد ميلادك، ودلوقتي عندك ${arYears(bd.turning)}. ربنا يفرّح قلبك ويبارك حياتك.`))) : null;
+  fill(app, h('div', { class: 'wrap' }, header(me.user.name), greet), main, bar);
   if (state.tab === 'week') kidWeek(main);
   else if (state.tab === 'quiz') kidQuiz(main);
+  else if (state.tab === 'library') libraryView(main, false);
   else if (state.tab === 'stars') kidStars(main);
   else kidProfile(main);
   window.scrollTo(0, 0);
@@ -274,6 +286,9 @@ async function kidWeek(main) {
   fill(main, 
     h('div', { class: 'stars-hero' }, (() => { const s = icon('star'); s.setAttribute('class', 'big'); return s; })(),
       h('div', null, starNum, h('span', { class: 'muted' }, 'مجموع نجومك'))),
+    (() => { const b = state.me.birthday; if (!b || b.is_today) return null;
+      return h('div', { class: 'card row bday-row' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic sm'); return c; })(),
+        h('div', { class: 'grow' }, h('b', null, 'عمرك ' + ageText(b)), h('div', { class: 'muted small' }, `فاضل ${arDays(b.days_until)} على عيد ميلادك`))); })(),
     h('div', { class: 'weeknav' },
       h('button', { class: 'btn ghost sm', type: 'button', disabled: !prevOk, onclick: () => { state.kidWeek = addDays(week.start, -7); renderKid(); } }, 'الأسبوع اللي فات'),
       h('b', { class: 'num', style: 'text-align:center' }, isCurrent ? 'الأسبوع ده' : weekLabel(week.start, week.end)),
@@ -316,6 +331,9 @@ function kidProfile(main) {
     return h('label', { class: 'f', for: id }, h('span', null, label, hint && h('small', null, ' ' + hint)), input);
   };
   const savedCount = p.siblings.length;
+  const by0 = p.birth ? p.birth.split('-').map(Number) : null;
+  const bsel = (id, label, opts, cur) => h('label', { class: 'f', for: id }, h('span', null, label),
+    h('select', { id }, h('option', { value: '' }, 'اختار'), opts.map(([v, t]) => h('option', { value: String(v), selected: cur === v }, t))));
   const sibBox = h('div', { class: 'stack' });
   const drawSibs = () => {
     fill(sibBox, 
@@ -346,10 +364,11 @@ function kidProfile(main) {
   const err = h('div', { class: 'err', hidden: true, role: 'alert' });
   const form = h('form', { class: 'card stack', novalidate: true, onsubmit: async (e) => {
     e.preventDefault(); err.hidden = true;
-    const body = { name: fields.name.value, mother_phone: fields.mother_phone.value, father_phone: fields.father_phone.value, address: fields.address.value, confessor: fields.confessor.value, school: fields.school.value, siblings: p.siblings };
+    const body = { name: fields.name.value, mother_phone: fields.mother_phone.value, father_phone: fields.father_phone.value, address: fields.address.value, confessor: fields.confessor.value, school: fields.school.value, siblings: p.siblings,
+      birth: { day: form.querySelector('#bday').value, month: form.querySelector('#bmonth').value, year: form.querySelector('#byear').value } };
     try {
       const r = await api('PUT', '/api/profile', body);
-      state.me.profile = r.profile; state.me.user.name = r.profile.name;
+      state.me.profile = r.profile; state.me.user.name = r.profile.name; state.me.birthday = r.birthday;
       toast('تم حفظ بياناتك');
       state.tab = 'week'; renderKid();
     } catch (ex) { err.textContent = ex.message; err.hidden = false; err.scrollIntoView({ block: 'center' }); }
@@ -363,6 +382,10 @@ function kidProfile(main) {
     mk('address', 'العنوان بالتفصيل', { tag: 'textarea', attrs: { placeholder: 'المحافظة، المنطقة، الشارع، رقم العمارة، الدور، علامة مميزة' } }),
     mk('confessor', 'أب الاعتراف'),
     mk('school', 'المدرسة'),
+    h('h3', null, 'تاريخ ميلادك'),
+    h('div', { class: 'grid3' }, bsel('bday', 'اليوم', Array.from({ length: 31 }, (_, i) => [i + 1, String(i + 1)]), by0 && by0[2]),
+      bsel('bmonth', 'الشهر', MONTH_NAMES.map((m, i) => [i + 1, m]), by0 && by0[1]),
+      bsel('byear', 'السنة', Array.from({ length: 17 }, (_, i) => { const y = new Date().getFullYear() - 4 - i; return [y, String(y)]; }), by0 && by0[0])),
     h('h3', null, 'الإخوات'),
     sibBox,
     err,
@@ -382,16 +405,19 @@ function renderStaff() {
   document.body.className = 'staff';
   const me = state.me.user;
   if (!state.tab) state.tab = 'overview';
-  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع'], ['quiz', 'المسابقة']];
+  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع'], ['quiz', 'المسابقة'], ['library', 'المكتبة']];
   if (me.role === 'admin') tabs.push(['team', 'الخدام والإعدادات']);
   tabs.push(['me', 'حسابي']);
   const main = h('main', { class: 'stack' });
+  const bdayBox = h('div', { class: 'stack' });
   fill(app, h('div', { class: 'wrap wide' },
-    header(`${me.name} (${ROLE_LABEL[me.role]})`),
+    header(`${me.name} (${ROLE_LABEL[me.role]})`), bdayBox,
     state.openKid ? '' : h('nav', { class: 'tabs', 'aria-label': 'التنقل' }, tabs.map(([id, label]) =>
       h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.staffContest = null; state.builder = null; renderStaff(); } }, label))),
     main));
+  staffBirthdays(bdayBox);
   if (state.openKid) staffKid(main, state.openKid);
+  else if (state.tab === 'library') libraryView(main, me.role === 'admin');
   else if (state.tab === 'overview') staffOverview(main);
   else if (state.tab === 'attendance') staffAttendance(main);
   else if (state.tab === 'quiz') staffQuiz(main);
@@ -472,6 +498,7 @@ async function staffKid(main, id) {
         h('dt', null, 'العنوان'), h('dd', null, p.address || '-'),
         h('dt', null, 'أب الاعتراف'), h('dd', null, p.confessor || '-'),
         h('dt', null, 'المدرسة'), h('dd', null, p.school || '-'),
+        h('dt', null, 'تاريخ الميلاد'), h('dd', null, r.birthday ? `${shortDate(r.birthday.birth)} ${r.birthday.birth.slice(0, 4)} (${ageText(r.birthday)})` : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
         h('dt', null, 'الإخوات'), h('dd', null, p.siblings.length ? p.siblings.map((x) => h('div', null, `${x.name}${x.age ? ' - ' + x.age + ' سنة' : ''}${x.grade ? ' - ' + x.grade : ''}`)) : 'مفيش'))),
     h('div', { class: 'card stack' }, h('h3', null, 'النجوم'),
       h('div', { class: 'stats' },
@@ -762,5 +789,70 @@ async function staffQuizOne(main, id) {
     missing.length > 0 && h('div', { class: 'card stack' }, h('h3', null, `لسه ما سلّموش (${missing.length})`), h('p', { class: 'muted' }, missing.join('، '))));
 }
 
+
+// ====================== أعياد الميلاد (شريط الخدام) ======================
+async function staffBirthdays(box) {
+  let r; try { r = await api('GET', '/api/staff/birthdays'); } catch { return; }
+  const names = r.today.map((k) => k.name);
+  const listJoin = (a) => a.length < 3 ? a.join(' و') : a.slice(0, -1).join('، ') + ' و' + a[a.length - 1];
+  const parts = [];
+  if (names.length) {
+    parts.push(h('div', { class: 'bday-card staff' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic'); return c; })(),
+      h('div', null, h('b', null, names.length === 1 ? `النهارده عيد ميلاد ${names[0]}` : `النهارده عيد ميلاد المجموعة دي (${names.length} أولاد)`),
+        h('p', null, names.length === 1 ? `يكمّل ${arYears(r.today[0].turning)}. فاكّروه بتهنئة.` : listJoin(names)))));
+  }
+  if (r.upcoming.length || r.missing) {
+    parts.push(h('details', { class: 'card bday-more' }, h('summary', null, r.upcoming.length ? `أعياد الميلاد القادمة (${r.upcoming.length})` : 'أعياد الميلاد'),
+      r.upcoming.length ? h('div', { class: 'list' }, r.upcoming.map((k) => h('div', { class: 'row between' },
+        h('span', null, h('b', null, k.name), h('span', { class: 'muted small' }, ` - هيكمّل ${arYears(k.turning)}`)),
+        h('span', { class: 'pill' }, k.days_until === 1 ? 'بكره' : `بعد ${arDays(k.days_until)}`)))) : h('p', { class: 'muted' }, 'مفيش أعياد ميلاد في الـ 30 يوم الجايين.'),
+      r.missing > 0 && h('p', { class: 'muted small', style: 'margin-top:8px' }, `${r.missing} ${r.missing > 10 ? 'ولد' : 'أولاد'} لسه ما كتبوش تاريخ ميلادهم.`)));
+  }
+  fill(box, parts);
+}
+
+// ====================== المكتبة: روابط وفيديوهات ======================
+function safeHref(u) { return /^https?:\/\//i.test(u) ? u : '#'; }
+function resourceCard(r, admin, reload) {
+  const media = h('div');
+  if (r.kind === 'video' && r.video_id) {
+    const box = h('div', { class: 'video-box' });
+    const play = h('button', { class: 'play', type: 'button', 'aria-label': 'تشغيل الفيديو: ' + r.title }, (() => { const st = icon('star'); return st; })(), h('span', null, 'تشغيل الفيديو'));
+    play.addEventListener('click', () => {
+      box.replaceChildren(h('iframe', { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(r.video_id)}?rel=0`, title: r.title, allow: 'accelerometer; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin', sandbox: 'allow-scripts allow-same-origin allow-presentation allow-popups', loading: 'lazy' }));
+    });
+    box.append(play); media.append(box);
+  }
+  return h('div', { class: 'card stack' },
+    h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('b', null, r.title), r.description && h('p', { class: 'muted' }, r.description)),
+      h('span', { class: 'pill' }, r.kind === 'video' ? 'فيديو' : 'رابط')),
+    media,
+    h('div', { class: 'row' }, h('a', { class: 'btn ghost sm', href: safeHref(r.url), target: '_blank', rel: 'noopener noreferrer', style: 'text-decoration:none' }, r.kind === 'video' ? 'فتح في يوتيوب' : 'فتح الرابط'),
+      admin && sureButton('حذف', 'تأكيد الحذف', async () => { const x = await act(() => api('DELETE', `/api/admin/resource/${r.id}`), 'تم الحذف'); if (x) reload(); })));
+}
+async function libraryView(main, admin) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const load = async () => {
+    const r = await act(() => api('GET', '/api/resources'));
+    if (!r) return;
+    const title = h('input', { id: 'rtitle', placeholder: 'مثلاً: ترنيمة الأسبوع' });
+    const url = h('input', { id: 'rurl', class: 'ltr', placeholder: 'https://www.youtube.com/watch?v=...', inputmode: 'url' });
+    const desc = h('textarea', { id: 'rdesc', placeholder: 'وصف قصير (اختياري)', maxlength: 400 });
+    const err = h('div', { class: 'err', hidden: true, role: 'alert' });
+    const form = admin ? h('form', { class: 'card stack', novalidate: true, onsubmit: async (e) => {
+      e.preventDefault(); err.hidden = true;
+      try { await api('POST', '/api/admin/resource', { title: title.value, url: url.value, description: desc.value }); toast('تمت الإضافة'); load(); }
+      catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    } },
+      h('h3', null, 'إضافة رابط أو فيديو'),
+      h('label', { class: 'f', for: 'rtitle' }, h('span', null, 'العنوان'), title),
+      h('label', { class: 'f', for: 'rurl' }, h('span', null, 'الرابط ', h('small', null, '(روابط يوتيوب بتتشغّل جوه الموقع)')), url),
+      h('label', { class: 'f', for: 'rdesc' }, h('span', null, 'الوصف'), desc), err,
+      h('button', { class: 'btn', type: 'submit' }, 'إضافة')) : null;
+    fill(main, h('h2', null, 'المكتبة'), form,
+      r.resources.length ? r.resources.map((x) => resourceCard(x, admin, load)) : h('div', { class: 'card' }, h('p', { class: 'muted' }, admin ? 'لسه ما ضفتش حاجة. أضف أول رابط أو فيديو من فوق.' : 'مفيش حاجة هنا لسه. هتظهر هنا الروابط والفيديوهات اللي بيضيفها الخادم.')));
+  };
+  load();
+}
 
 boot().catch(() => showAuth());

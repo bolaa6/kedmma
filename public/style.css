@@ -212,3 +212,19 @@ tr:last-child td { border-bottom: 0; }
 .opt input[type="radio"] { width: 20px; height: 20px; accent-color: var(--primary); padding: 0; flex: none; }
 .ltr-letter { font-weight: 800; color: var(--ink-2); min-width: 1.4em; }
 [hidden] { display: none !important; }
+
+.grid3 { display: grid; gap: 10px; grid-template-columns: 1fr 1.4fr 1.2fr; }
+.bday-card { display: flex; gap: 14px; align-items: center; padding: 16px; border-radius: 20px; border: 1px solid var(--star); background: linear-gradient(135deg, var(--star-soft), var(--surface)); box-shadow: var(--shadow); margin-bottom: 12px; }
+.bday-card b { font-family: var(--display); font-size: 1.25rem; line-height: 1.4; display: block; }
+.bday-card p { color: var(--ink-2); margin-top: 2px; }
+.bday-ic { width: 46px; height: 46px; color: var(--star); flex: none; }
+.bday-ic.sm { width: 28px; height: 28px; }
+.bday-row { margin: 0; }
+.bday-more { padding: 12px 16px; margin-bottom: 12px; }
+.bday-more summary { cursor: pointer; font-weight: 700; }
+.bday-more[open] summary { margin-bottom: 8px; }
+.video-box { position: relative; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; border-radius: 14px; overflow: hidden; background: #0b1722; }
+.video-box iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.play { position: absolute; inset: 0; width: 100%; border: 0; background: linear-gradient(135deg, #1d4f80, #0b1722); color: #fff; font-weight: 700; display: grid; place-content: center; justify-items: center; gap: 8px; }
+.play svg { width: 44px; height: 44px; color: var(--star); }
+@media (max-width: 400px) { .grid3 { grid-template-columns: 1fr 1.5fr 1.2fr; gap: 6px; } .tabbar button { font-size: .74rem; } }

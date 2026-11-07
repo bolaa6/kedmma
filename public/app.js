@@ -32,6 +32,7 @@ function icon(name) {
     week: 'M7 2h2v2h6V2h2v2h3v18H4V4h3zm-1 7v11h12V9z M8 11h3v3H8z',
     user: 'M12 12a4.5 4.5 0 100-9 4.5 4.5 0 000 9zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z',
     people: 'M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm7 1a3 3 0 100-6 3 3 0 000 6zM9 13c-3.3 0-6 1.8-6 4v2h12v-2c0-2.2-2.7-4-6-4zm7 0c-.6 0-1.2.1-1.7.2 1.1.9 1.7 2.1 1.7 3.8v2h5v-2c0-2-2.2-4-5-4z',
+    trophy: 'M6 2h12v2h3v4c0 2.2-1.8 4-4 4h-.3A5 5 0 0113 15.9V18h3v2H8v-2h3v-2.1A5 5 0 017.3 12H7C4.8 12 3 10.2 3 8V4h3zm0 4H5v2c0 1.1.9 2 2 2zm12 0v4c1.1 0 2-.9 2-2V6z',
     moon: 'M20.5 14.5A8.5 8.5 0 019.5 3.5 8.5 8.5 0 1020.5 14.5z',
     sun: 'M12 7a5 5 0 100 10 5 5 0 000-10zM11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1l1.4-1.4 2.1 2.1-1.4 1.4zM5.6 19.8l-1.4-1.4 2.1-2.1 1.4 1.4zM17.7 7.7l-1.4-1.4 2.1-2.1 1.4 1.4z',
   };
@@ -204,11 +205,12 @@ function renderKid() {
   const me = state.me;
   if (!state.tab) state.tab = me.profile.complete ? 'week' : 'profile';
   const main = h('main', { class: 'wrap stack' });
-  const tabs = [['week', 'أسبوعي', 'week'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
+  const tabs = [['week', 'أسبوعي', 'week'], ['quiz', 'المسابقة', 'trophy'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
   const bar = h('nav', { class: 'tabbar', 'aria-label': 'التنقل' }, tabs.map(([id, label, ic]) =>
-    h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; renderKid(); } }, icon(ic), label)));
+    h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.openContest = null; renderKid(); } }, icon(ic), label)));
   fill(app, h('div', { class: 'wrap' }, header(me.user.name)), main, bar);
   if (state.tab === 'week') kidWeek(main);
+  else if (state.tab === 'quiz') kidQuiz(main);
   else if (state.tab === 'stars') kidStars(main);
   else kidProfile(main);
   window.scrollTo(0, 0);
@@ -296,6 +298,7 @@ async function kidStars(main) {
       row('القداس', s.mass, 'نجمة لكل أسبوع'),
       row('الاعتراف', s.confession, 'نجمة لكل شهر'),
       row('حضور الاجتماع', s.attendance, 'نجمة لكل مرة'),
+      row('المسابقة', s.quiz, 'نجمة لكل درجة'),
       row('زيادة أو خصم من الخدام', s.adjust)),
     r.notes.length > 0 && h('div', { class: 'card stack' }, h('h3', null, 'ملاحظات من الخدام'),
       h('div', { class: 'list' }, r.notes.map((n) => h('div', { class: 'row between', style: 'align-items:flex-start' },
@@ -379,18 +382,19 @@ function renderStaff() {
   document.body.className = 'staff';
   const me = state.me.user;
   if (!state.tab) state.tab = 'overview';
-  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع']];
+  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع'], ['quiz', 'المسابقة']];
   if (me.role === 'admin') tabs.push(['team', 'الخدام والإعدادات']);
   tabs.push(['me', 'حسابي']);
   const main = h('main', { class: 'stack' });
   fill(app, h('div', { class: 'wrap wide' },
     header(`${me.name} (${ROLE_LABEL[me.role]})`),
     state.openKid ? '' : h('nav', { class: 'tabs', 'aria-label': 'التنقل' }, tabs.map(([id, label]) =>
-      h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; renderStaff(); } }, label))),
+      h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.staffContest = null; state.builder = null; renderStaff(); } }, label))),
     main));
   if (state.openKid) staffKid(main, state.openKid);
   else if (state.tab === 'overview') staffOverview(main);
   else if (state.tab === 'attendance') staffAttendance(main);
+  else if (state.tab === 'quiz') staffQuiz(main);
   else if (state.tab === 'team') staffTeam(main);
   else staffMe(main);
 }
@@ -471,7 +475,7 @@ async function staffKid(main, id) {
         h('dt', null, 'الإخوات'), h('dd', null, p.siblings.length ? p.siblings.map((x) => h('div', null, `${x.name}${x.age ? ' - ' + x.age + ' سنة' : ''}${x.grade ? ' - ' + x.grade : ''}`)) : 'مفيش'))),
     h('div', { class: 'card stack' }, h('h3', null, 'النجوم'),
       h('div', { class: 'stats' },
-        [['الصلاة', s.prayer], ['الإنجيل', s.gospel], ['القداس', s.mass], ['الاعتراف', s.confession], ['الاجتماع', s.attendance], ['زيادة/خصم', s.adjust]].map(([l, n]) =>
+        [['الصلاة', s.prayer], ['الإنجيل', s.gospel], ['القداس', s.mass], ['الاعتراف', s.confession], ['الاجتماع', s.attendance], ['المسابقة', s.quiz], ['زيادة/خصم', s.adjust]].map(([l, n]) =>
           h('div', { class: 'stat' }, h('b', { class: 'num' }, String(n)), h('span', null, l))))),
     h('div', { class: 'card stack' }, h('h3', null, 'آخر 4 أسابيع'),
       r.days.length ? h('div', { class: 'tablebox' }, h('table', null,
@@ -576,5 +580,187 @@ async function staffTeam(main) {
 function staffMe(main) {
   fill(main, h('div', { class: 'wrap stack' }, passwordCard(), h('button', { class: 'btn ghost', type: 'button', onclick: logout }, 'تسجيل الخروج')));
 }
+
+
+// ====================== المسابقة ======================
+function statusPill(st) {
+  const m = { open: ['مفتوحة', 'good'], closed: ['مقفولة', ''], draft: ['مسودة', 'bad'] }[st] || ['', ''];
+  return h('span', { class: 'pill ' + m[1] }, m[0]);
+}
+
+// ---- الولد ----
+async function kidQuiz(main) {
+  if (state.openContest) return kidQuizOne(main, state.openContest);
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', '/api/contests'));
+  if (!r) return;
+  fill(main, h('h2', null, 'مسابقة الإنجيل'),
+    r.contests.length ? h('div', { class: 'stack' }, r.contests.map((c) => h('button', { class: 'card row between quiz-item', type: 'button', onclick: () => { state.openContest = c.id; renderKid(); } },
+      h('div', { class: 'grow' }, h('b', null, c.title), h('div', { class: 'muted small' }, `${c.count} سؤال - أعلى درجة ${c.max}`)),
+      c.submitted ? h('span', { class: 'pill star' }, c.pending ? 'سلّمت - قيد التصحيح' : `${c.score} من ${c.max}`) : statusPill(c.status))))
+      : h('div', { class: 'card' }, h('p', { class: 'muted' }, 'مفيش مسابقة دلوقتي. استنى المسابقة الجاية.')));
+}
+
+async function kidQuizOne(main, id) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', `/api/contest/${id}`));
+  if (!r) { state.openContest = null; return kidQuiz(main); }
+  const { contest: c, mine } = r;
+  const back = h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.openContest = null; renderKid(); } }, 'رجوع للمسابقات');
+  // نتيجة (سلّم قبل كده أو المسابقة اتقفلت)
+  if (mine || c.status !== 'open') {
+    const letters = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
+    fill(main, back,
+      h('div', { class: 'card stack' }, h('h2', null, c.title),
+        mine ? h('div', { class: 'row' }, h('span', { class: 'pill star', style: 'font-size:1rem' }, `${mine.score} من ${c.max}`, starIc()), mine.pending > 0 && h('span', { class: 'pill' }, `${mine.pending} سؤال كتابي قيد التصحيح`))
+             : h('p', { class: 'notice' }, 'المسابقة دي اتقفلت وانت ما سلّمتش إجاباتك.'),
+        mine && c.status === 'open' && h('p', { class: 'muted small' }, 'الإجابات الصحيحة هتظهر لما المسابقة تقفل.')),
+      c.questions.map((q, i) => {
+        const my = mine ? mine.answers[q.id] : null; const pts = mine ? mine.scores[q.id] : null;
+        return h('div', { class: 'card stack' },
+          h('div', { class: 'row between', style: 'align-items:flex-start' }, h('b', { class: 'grow' }, `${i + 1}. ${q.text}`),
+            mine && h('span', { class: 'pill ' + (pts === null ? '' : pts > 0 ? 'good' : 'bad') }, pts === null ? 'قيد التصحيح' : `${pts} من ${q.points}`)),
+          q.type === 'mcq'
+            ? h('div', { class: 'stack', style: 'gap:6px' }, q.options.map((o, k) => h('div', { class: 'opt' + (q.correct === k ? ' right' : '') + (my === k && q.correct !== undefined && q.correct !== k ? ' wrong' : '') + (my === k ? ' mine' : '') },
+                h('span', { class: 'ltr-letter' }, letters[k]), h('span', { class: 'grow' }, o), my === k && h('span', { class: 'pill' }, 'إجابتك'), q.correct === k && h('span', { class: 'pill good' }, 'الصحيحة'))))
+            : h('div', { class: 'opt mine' }, my ? my : h('span', { class: 'muted' }, 'ما كتبتش إجابة')));
+      }));
+    return;
+  }
+  // نموذج الحل
+  const err = h('div', { class: 'err', hidden: true, role: 'alert' });
+  const btn = h('button', { class: 'btn block', type: 'button' }, 'سلّم الإجابات');
+  const form = h('form', { class: 'stack', novalidate: true });
+  const letters = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
+  c.questions.forEach((q, i) => {
+    form.append(h('div', { class: 'card stack' },
+      h('div', { class: 'row between', style: 'align-items:flex-start' }, h('b', { class: 'grow' }, `${i + 1}. ${q.text}`), h('span', { class: 'pill' }, `${q.points} ${q.points > 2 ? 'درجات' : q.points === 2 ? 'درجتين' : 'درجة'}`)),
+      q.type === 'mcq'
+        ? h('div', { class: 'stack', style: 'gap:6px' }, q.options.map((o, k) => h('label', { class: 'opt pick', for: `${q.id}_${k}` },
+            h('input', { type: 'radio', name: q.id, id: `${q.id}_${k}`, value: String(k) }), h('span', { class: 'ltr-letter' }, letters[k]), h('span', { class: 'grow' }, o))))
+        : h('textarea', { id: 'a_' + q.id, placeholder: 'اكتب إجابتك هنا', maxlength: 500, 'aria-label': 'إجابة السؤال ' + (i + 1) })));
+  });
+  btn.addEventListener('click', async () => {
+    if (!btn.dataset.sure) { btn.dataset.sure = '1'; btn.textContent = 'اضغط تاني للتسليم النهائي (مش هتقدر تعدّل)'; setTimeout(() => { delete btn.dataset.sure; btn.textContent = 'سلّم الإجابات'; }, 6000); return; }
+    const answers = {};
+    for (const q of c.questions) {
+      if (q.type === 'mcq') { const ch = form.querySelector(`input[name="${q.id}"]:checked`); if (ch) answers[q.id] = Number(ch.value); }
+      else answers[q.id] = form.querySelector('#a_' + q.id).value;
+    }
+    err.hidden = true;
+    try { await api('POST', `/api/contest/${id}/submit`, { answers }); toast('تم تسليم إجاباتك'); renderKid(); }
+    catch (ex) { err.textContent = ex.message; err.hidden = false; delete btn.dataset.sure; btn.textContent = 'سلّم الإجابات'; }
+  });
+  fill(main, back, h('div', { class: 'card stack' }, h('h2', null, c.title), h('p', { class: 'muted' }, `أعلى درجة ${c.max}. كل درجة بنجمة. تسلّم مرة واحدة بس، فراجع إجاباتك قبل التسليم.`)), form, err, btn);
+}
+
+// ---- الخدام والمسؤول ----
+async function staffQuiz(main) {
+  if (state.builder) return quizBuilder(main, state.builder);
+  if (state.staffContest) return staffQuizOne(main, state.staffContest);
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', '/api/staff/contests'));
+  if (!r) return;
+  const admin = state.me.user.role === 'admin';
+  fill(main,
+    h('div', { class: 'row between' }, h('h2', null, 'مسابقة الإنجيل'),
+      admin && h('button', { class: 'btn', type: 'button', onclick: () => { state.builder = { id: null, title: '', questions: [newQuestion()] }; renderStaff(); } }, 'مسابقة جديدة')),
+    r.contests.length ? h('div', { class: 'stack' }, r.contests.map((c) => h('button', { class: 'card row between quiz-item', type: 'button', onclick: () => { state.staffContest = c.id; renderStaff(); } },
+      h('div', { class: 'grow' }, h('b', null, c.title), h('div', { class: 'muted small' }, `${c.count} سؤال - أعلى درجة ${c.max} - سلّم ${c.submissions} ولد`)), statusPill(c.status))))
+      : h('div', { class: 'card' }, h('p', { class: 'muted' }, admin ? 'لسه ما عملتش مسابقة. اضغط "مسابقة جديدة".' : 'مفيش مسابقات لسه.')));
+}
+
+const newQuestion = () => ({ type: 'mcq', text: '', points: 1, options: ['', ''], correct: 0 });
+
+function quizBuilder(main, b) {
+  const err = h('div', { class: 'err', hidden: true, role: 'alert' });
+  const box = h('div', { class: 'stack' });
+  const title = h('input', { id: 'ctitle', value: b.title, placeholder: 'مثلاً: مسابقة إنجيل متى - الأصحاح 5', oninput: (e) => { b.title = e.target.value; } });
+  const draw = () => {
+    fill(box, b.questions.map((q, i) => {
+      const optsBox = h('div', { class: 'stack', style: 'gap:6px' });
+      if (q.type === 'mcq') {
+        q.options.forEach((o, k) => optsBox.append(h('div', { class: 'row', style: 'flex-wrap:nowrap' },
+          h('input', { type: 'radio', name: 'correct' + i, checked: q.correct === k, 'aria-label': 'الإجابة الصحيحة', style: 'width:22px;flex:none', onchange: () => { q.correct = k; } }),
+          h('input', { value: o, placeholder: 'اختيار ' + (k + 1), 'aria-label': `اختيار ${k + 1} للسؤال ${i + 1}`, oninput: (e) => { q.options[k] = e.target.value; } }),
+          q.options.length > 2 && h('button', { class: 'btn bad sm', type: 'button', onclick: () => { q.options.splice(k, 1); if (q.correct >= q.options.length) q.correct = 0; else if (q.correct > k) q.correct--; draw(); } }, 'مسح'))));
+        if (q.options.length < 6) optsBox.append(h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { q.options.push(''); draw(); } }, 'إضافة اختيار'));
+        optsBox.append(h('p', { class: 'muted small' }, 'الدايرة جنب الاختيار الصحيح.'));
+      }
+      return h('div', { class: 'card stack' },
+        h('div', { class: 'row between' }, h('b', null, `سؤال ${i + 1}`), b.questions.length > 1 && h('button', { class: 'btn bad sm', type: 'button', onclick: () => { b.questions.splice(i, 1); draw(); } }, 'مسح السؤال')),
+        h('div', { class: 'grid2' },
+          h('label', { class: 'f', for: 'qt' + i }, h('span', null, 'نوع السؤال'), h('select', { id: 'qt' + i, onchange: (e) => { q.type = e.target.value; if (q.type === 'mcq' && !q.options) { q.options = ['', '']; q.correct = 0; } draw(); } },
+            h('option', { value: 'mcq', selected: q.type === 'mcq' }, 'اختيار من متعدد'), h('option', { value: 'text', selected: q.type === 'text' }, 'كتابي (بتصححه إنت)'))),
+          h('label', { class: 'f', for: 'qp' + i }, h('span', null, 'الدرجة'), h('input', { id: 'qp' + i, type: 'number', min: 1, max: 10, value: q.points, class: 'ltr', oninput: (e) => { q.points = Number(e.target.value); } }))),
+        h('label', { class: 'f', for: 'qx' + i }, h('span', null, 'نص السؤال'), h('textarea', { id: 'qx' + i, oninput: (e) => { q.text = e.target.value; }, value: q.text })),
+        q.type === 'mcq' && optsBox);
+    }), b.questions.length < 30 && h('button', { class: 'btn ghost', type: 'button', onclick: () => { b.questions.push(newQuestion()); draw(); } }, 'إضافة سؤال'));
+    box.querySelectorAll('textarea').forEach((t, i) => { t.value = b.questions[i] ? b.questions[i].text : ''; });
+  };
+  draw();
+  const save = (status) => async () => {
+    err.hidden = true;
+    const body = { title: b.title, questions: b.questions.map((q) => (q.type === 'mcq' ? { type: 'mcq', text: q.text, points: q.points, options: q.options, correct: q.correct } : { type: 'text', text: q.text, points: q.points })), status };
+    try {
+      if (b.id) await api('PUT', `/api/admin/contest/${b.id}`, body); else await api('POST', '/api/admin/contest', body);
+      toast('تم الحفظ'); state.builder = null; renderStaff();
+    } catch (ex) { err.textContent = ex.message; err.hidden = false; err.scrollIntoView({ block: 'center' }); }
+  };
+  fill(main,
+    h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.builder = null; renderStaff(); } }, 'رجوع'),
+    h('div', { class: 'card stack' }, h('h2', null, b.id ? 'تعديل المسابقة' : 'مسابقة جديدة'), h('label', { class: 'f', for: 'ctitle' }, h('span', null, 'عنوان المسابقة'), title)),
+    box, err,
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', type: 'button', onclick: save('open') }, b.id ? 'حفظ' : 'حفظ وفتح للأولاد'),
+      !b.id && h('button', { class: 'btn ghost', type: 'button', onclick: save('draft') }, 'حفظ كمسودة')));
+}
+
+async function staffQuizOne(main, id) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', `/api/staff/contest/${id}`));
+  if (!r) { state.staffContest = null; return staffQuiz(main); }
+  const { contest: c, submissions, missing } = r;
+  const admin = state.me.user.role === 'admin', canGrade = canMark();
+  const setStatus = (st, msg) => async () => { const x = await act(() => api('PATCH', `/api/admin/contest/${id}`, { status: st }), msg); if (x) renderStaff(); };
+  const letters = ['أ', 'ب', 'ج', 'د', 'هـ', 'و'];
+  fill(main,
+    h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.staffContest = null; renderStaff(); } }, 'رجوع للمسابقات'),
+    h('div', { class: 'card stack' },
+      h('div', { class: 'row between' }, h('h2', null, c.title), statusPill(c.status)),
+      h('p', { class: 'muted' }, `${c.questions.length} سؤال - أعلى درجة ${c.max} - سلّم ${submissions.length} ولد`),
+      admin && h('div', { class: 'row' },
+        c.status !== 'open' && h('button', { class: 'btn sm', type: 'button', onclick: setStatus('open', 'المسابقة اتفتحت') }, c.status === 'closed' ? 'إعادة فتح' : 'فتح للأولاد'),
+        c.status === 'open' && h('button', { class: 'btn sm', type: 'button', onclick: setStatus('closed', 'المسابقة اتقفلت') }, 'قفل وإظهار الإجابات الصحيحة'),
+        c.status !== 'draft' && submissions.length === 0 && h('button', { class: 'btn ghost sm', type: 'button', onclick: setStatus('draft', 'رجعت مسودة') }, 'رجوع لمسودة'),
+        submissions.length === 0 && h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { state.builder = { id: c.id, title: c.title, questions: c.questions.map((q) => ({ type: q.type, text: q.text, points: q.points, options: q.options ? [...q.options] : ['', ''], correct: q.correct || 0 })) }; renderStaff(); } }, 'تعديل الأسئلة'),
+        sureButton('حذف المسابقة', 'تأكيد الحذف النهائي', async () => { const x = await act(() => api('DELETE', `/api/admin/contest/${id}`), 'تم حذف المسابقة'); if (x) { state.staffContest = null; renderStaff(); } }))),
+    h('div', { class: 'card stack' }, h('h3', null, 'الأسئلة والإجابات الصحيحة'),
+      h('div', { class: 'list' }, c.questions.map((q, i) => h('div', null, h('b', null, `${i + 1}. ${q.text}`, ' '), h('span', { class: 'pill' }, q.type === 'mcq' ? `اختيار - ${q.points}` : `كتابي - ${q.points}`),
+        q.type === 'mcq' && h('div', { class: 'muted small' }, q.options.map((o, k) => `${letters[k]}) ${o}${k === q.correct ? ' ✓' : ''}`).join('   ')))))),
+    h('h3', null, 'إجابات الأولاد'),
+    submissions.length ? submissions.map((s) => {
+      const totalEl = h('span', { class: 'pill star num' }, `${s.score} من ${c.max}`, starIc());
+      const pendEl = h('span', { class: 'pill', hidden: !s.pending }, `${s.pending} قيد التصحيح`);
+      return h('div', { class: 'card stack' },
+        h('div', { class: 'row between' }, h('b', null, s.name), h('div', { class: 'row' }, pendEl, totalEl)),
+        h('div', { class: 'list' }, c.questions.map((q, i) => {
+          const a = s.answers[q.id]; const pts = s.scores[q.id];
+          if (q.type === 'mcq') return h('div', { class: 'row between', style: 'align-items:flex-start' },
+            h('div', { class: 'grow' }, h('span', { class: 'muted small' }, `سؤال ${i + 1}`), h('div', null, a === null || a === undefined ? 'ما جاوبش' : q.options[a])),
+            h('span', { class: 'pill ' + (pts > 0 ? 'good' : 'bad') }, `${pts} من ${q.points}`));
+          const inp = h('input', { type: 'number', min: 0, max: q.points, class: 'ltr', style: 'width:76px', value: pts === null || pts === undefined ? '' : pts, placeholder: '0-' + q.points, 'aria-label': `درجة ${s.name} في سؤال ${i + 1}`, disabled: !canGrade || !a });
+          return h('div', { class: 'stack', style: 'gap:6px' },
+            h('span', { class: 'muted small' }, `سؤال ${i + 1} (كتابي)`), h('div', { class: 'opt mine' }, a ? a : h('span', { class: 'muted' }, 'ما كتبش إجابة')),
+            a && h('div', { class: 'row' }, inp, h('span', { class: 'muted small' }, `من ${q.points}`),
+              canGrade && h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+                const res = await act(() => api('POST', `/api/staff/contest/${id}/grade`, { user_id: s.user_id, question_id: q.id, points: Number(inp.value) }), 'تم حفظ الدرجة');
+                if (res) { totalEl.firstChild.textContent = `${res.score} من ${c.max}`; pendEl.hidden = !res.pending; pendEl.textContent = `${res.pending} قيد التصحيح`; }
+              } }, 'حفظ الدرجة')));
+        })));
+    }) : h('div', { class: 'card' }, h('p', { class: 'muted' }, 'لسه ما حدش سلّم.')),
+    missing.length > 0 && h('div', { class: 'card stack' }, h('h3', null, `لسه ما سلّموش (${missing.length})`), h('p', { class: 'muted' }, missing.join('، '))));
+}
+
 
 boot().catch(() => showAuth());

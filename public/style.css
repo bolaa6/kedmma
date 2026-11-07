@@ -201,3 +201,14 @@ tr:last-child td { border-bottom: 0; }
 .avatar { border-radius: 50%; object-fit: cover; background: var(--primary-soft); color: var(--primary); display: inline-grid; place-items: center; flex: none; border: 1px solid var(--line); }
 .avatar svg { width: 55%; height: 55%; }
 .btn.sm.bad, .btn.bad.sm { white-space: nowrap; }
+
+.quiz-item { width: 100%; text-align: start; cursor: pointer; color: var(--ink); font: inherit; }
+.quiz-item:hover { border-color: var(--primary); }
+.opt { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--bg); overflow-wrap: anywhere; }
+.opt.pick { cursor: pointer; }
+.opt.pick:has(input:checked), .opt.mine { border-color: var(--primary); background: var(--primary-soft); }
+.opt.right { border-color: var(--good); background: var(--good-soft); }
+.opt.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.opt input[type="radio"] { width: 20px; height: 20px; accent-color: var(--primary); padding: 0; flex: none; }
+.ltr-letter { font-weight: 800; color: var(--ink-2); min-width: 1.4em; }
+[hidden] { display: none !important; }

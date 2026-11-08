@@ -216,6 +216,7 @@ function renderKid() {
   if (!state.tab) state.tab = me.profile.complete ? 'week' : 'profile';
   const main = h('main', { class: 'wrap stack' });
   const tabs = [['week', 'أسبوعي', 'week'], ['quiz', 'المسابقة', 'trophy'], ['library', 'المكتبة', 'book'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
+  if (me.game_enabled) tabs.splice(2, 0, ['game', 'اللعبة', 'trophy']);
   const bar = h('nav', { class: 'tabbar', 'aria-label': 'التنقل' }, tabs.map(([id, label, ic]) =>
     h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.openContest = null; renderKid(); } }, icon(ic), label)));
   const bd = me.birthday;
@@ -224,6 +225,7 @@ function renderKid() {
   fill(app, h('div', { class: 'wrap' }, header(me.user.name), greet), main, bar);
   if (state.tab === 'week') kidWeek(main);
   else if (state.tab === 'quiz') kidQuiz(main);
+  else if (state.tab === 'game') kidGame(main);
   else if (state.tab === 'library') libraryView(main, false);
   else if (state.tab === 'stars') kidStars(main);
   else kidProfile(main);
@@ -316,6 +318,7 @@ async function kidStars(main) {
       row('الاعتراف', s.confession, 'نجمة لكل شهر'),
       row('حضور الاجتماع', s.attendance, 'نجمة لكل مرة'),
       row('المسابقة', s.quiz, 'نجمة لكل درجة'),
+      s.game > 0 && row('لعبة السلم والتعبان', s.game, 'نجمة لكل سؤال صح'),
       row('زيادة أو خصم من الخدام', s.adjust)),
     r.notes.length > 0 && h('div', { class: 'card stack' }, h('h3', null, 'ملاحظات من الخدام'),
       h('div', { class: 'list' }, r.notes.map((n) => h('div', { class: 'row between', style: 'align-items:flex-start' },
@@ -507,7 +510,7 @@ async function staffKid(main, id) {
         h('dt', null, 'الإخوات'), h('dd', null, p.siblings.length ? p.siblings.map((x) => h('div', null, `${x.name}${x.age ? ' - ' + x.age + ' سنة' : ''}${x.grade ? ' - ' + x.grade : ''}`)) : 'مفيش'))),
     h('div', { class: 'card stack' }, h('h3', null, 'النجوم'),
       h('div', { class: 'stats' },
-        [['الصلاة', s.prayer], ['الإنجيل', s.gospel], ['القداس', s.mass], ['الاعتراف', s.confession], ['الاجتماع', s.attendance], ['المسابقة', s.quiz], ['زيادة/خصم', s.adjust]].map(([l, n]) =>
+        [['الصلاة', s.prayer], ['الإنجيل', s.gospel], ['القداس', s.mass], ['الاعتراف', s.confession], ['الاجتماع', s.attendance], ['المسابقة', s.quiz], ['اللعبة', s.game || 0], ['زيادة/خصم', s.adjust]].map(([l, n]) =>
           h('div', { class: 'stat' }, h('b', { class: 'num' }, String(n)), h('span', null, l))))),
     h('div', { class: 'card stack' }, h('h3', null, 'آخر 4 أسابيع'),
       r.days.length ? h('div', { class: 'tablebox' }, h('table', null,
@@ -586,7 +589,8 @@ async function staffTeam(main) {
   const f = { name: h('input', { id: 'sname' }), phone: h('input', { id: 'sphone', class: 'ltr', type: 'tel' }), pw: h('input', { id: 'spw', class: 'ltr', placeholder: '6 على الأقل' }),
     role: h('select', { id: 'srole' }, h('option', { value: 'viewer' }, 'متابع (يشوف بس)'), h('option', { value: 'servant' }, 'خادم (يسجل الحضور والنجوم والملاحظات)')) };
   const reqCard = await resetRequestsCard(() => renderStaff());
-  fill(main, reqCard,
+  const gameCard = await gameAdminCard();
+  fill(main, reqCard, gameCard,
     h('div', { class: 'card stack' }, h('h3', null, 'الخدام والمتابعين'),
       h('div', { class: 'list' }, r.staff.map((u) => h('div', { class: 'row between' },
         h('div', null, h('b', null, u.name), h('div', { class: 'muted small ltr', style: 'text-align:start' }, u.phone)),
@@ -1032,7 +1036,7 @@ async function reportView(main, id) {
         row('الصلاة', `${r.prayer} يوم من ${r.elapsed}`), row('قراءة الإنجيل', `${r.gospel} يوم من ${r.elapsed}`),
         row('القداس', `${r.mass} مرة`), row('الاعتراف', r.confession ? 'تم' : 'لم يتم بعد'),
         row('حضور الاجتماع', r.meetings ? `${r.attendance.length} من ${r.meetings}` : 'لا توجد اجتماعات مسجلة'),
-        row('نجوم الشهر', String(r.stars))))),
+        r.game > 0 ? row('نجوم اللعبة', String(r.game)) : null, row('نجوم الشهر', String(r.stars))))),
       r.quizzes.length ? h('div', null, h('h3', null, 'المسابقات'), r.quizzes.map((q) => h('div', { class: 'row between' }, h('span', null, q.title),
         q.submitted ? h('span', { class: 'pill good num' }, `${q.score} من ${q.max}${q.pending ? ' (في انتظار التصحيح)' : ''}`) : h('span', { class: 'pill bad' }, 'لم يشارك')))) : null,
       showNotes && r.notes.length ? h('div', null, h('h3', null, 'ملاحظات'), r.notes.map((n) => h('div', null, `${n.day}: ${n.text}${n.delta ? ` (${n.delta > 0 ? '+' : ''}${n.delta} نجمة)` : ''}`))) : null);
@@ -1145,6 +1149,187 @@ async function staffRanking(main) {
         h('span', { class: 'pill num' + (k.rank <= 3 && k.stars > 0 ? ' star' : ''), style: 'min-width:2rem;justify-content:center' }, String(k.rank)),
         avatar(k.id, k.photo, 36), h('b', null, k.name)),
       h('span', { class: 'pill star num' }, String(k.stars), starIc()))) : h('p', { class: 'muted' }, 'لسه مفيش أولاد.')));
+}
+
+// ====================== لعبة السلم والتعبان ======================
+const PAWN = ['#e74c3c', '#2f74b5', '#27ae60', '#f39c12', '#8e44ad', '#16a085'];
+const SVGNS = 'http://www.w3.org/2000/svg';
+function sv(tag, attrs, ...kids) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  for (const c of kids) { if (c === null || c === undefined || c === false) continue; el.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  return el;
+}
+const cellXY = (n) => { const i = n - 1, row = Math.floor(i / 10), col = row % 2 === 0 ? i % 10 : 9 - (i % 10); return [col * 10 + 5, (9 - row) * 10 + 5]; };
+const PAWN_OFF = [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4], [0, -3.4], [0, 3.4]];
+
+function boardSvg(board, players, turn) {
+  const svg = sv('svg', { viewBox: '0 0 100 100', class: 'gb', role: 'img', 'aria-label': 'لوحة اللعبة' });
+  const qset = new Set(board.q);
+  for (let n = 1; n <= 100; n++) {
+    const [cx, cy] = cellXY(n);
+    svg.append(sv('rect', { x: cx - 5, y: cy - 5, width: 10, height: 10, class: qset.has(n) ? 'gb-q' : ((Math.floor((n - 1) / 10) + (n - 1)) % 2 ? 'gb-c1' : 'gb-c2') }));
+    svg.append(sv('text', { x: cx - 4.3, y: cy - 2.6, class: 'gb-num' }, String(n)));
+    if (qset.has(n)) svg.append(sv('text', { x: cx, y: cy + 3, class: 'gb-qm', 'text-anchor': 'middle' }, '؟'));
+  }
+  const line = (a, b, off, cls) => {
+    const [x1, y1] = cellXY(a), [x2, y2] = cellXY(b); const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1; const nx = -dy / len * off, ny = dx / len * off;
+    return sv('line', { x1: x1 + nx, y1: y1 + ny, x2: x2 + nx, y2: y2 + ny, class: cls });
+  };
+  for (const [a, b] of Object.entries(board.ladders)) {
+    const A = Number(a), [x1, y1] = cellXY(A), [x2, y2] = cellXY(b); const len = Math.hypot(x2 - x1, y2 - y1);
+    svg.append(line(A, b, 1.3, 'gb-rail'), line(A, b, -1.3, 'gb-rail'));
+    const rungs = Math.max(2, Math.floor(len / 5));
+    for (let i = 1; i < rungs; i++) { const f = i / rungs, x = x1 + (x2 - x1) * f, y = y1 + (y2 - y1) * f; const nx = -(y2 - y1) / len * 1.3, ny = (x2 - x1) / len * 1.3; svg.append(sv('line', { x1: x + nx, y1: y + ny, x2: x - nx, y2: y - ny, class: 'gb-rung' })); }
+  }
+  for (const [a, b] of Object.entries(board.snakes)) {
+    const [x1, y1] = cellXY(Number(a)), [x2, y2] = cellXY(b); const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1; const amp = len * 0.16, nx = -dy / len * amp, ny = dx / len * amp;
+    svg.append(sv('path', { d: `M${x1} ${y1} C${x1 + dx * 0.33 + nx} ${y1 + dy * 0.33 + ny} ${x1 + dx * 0.66 - nx} ${y1 + dy * 0.66 - ny} ${x2} ${y2}`, class: 'gb-snake' }));
+    svg.append(sv('circle', { cx: x1, cy: y1, r: 1.8, class: 'gb-head' }), sv('circle', { cx: x1 - 0.6, cy: y1 - 0.5, r: 0.35, fill: '#fff' }), sv('circle', { cx: x1 + 0.6, cy: y1 - 0.5, r: 0.35, fill: '#fff' }));
+  }
+  players.forEach((p, i) => {
+    if (!p.pos || p.status !== 'in') return;
+    const [cx, cy] = cellXY(p.pos), o = PAWN_OFF[i % 6];
+    svg.append(sv('circle', { cx: cx + o[0], cy: cy + o[1], r: 2.1, fill: PAWN[p.color % 6], class: 'gb-pawn' + (i === turn ? ' turn' : '') }));
+  });
+  return svg;
+}
+
+const gameShell = (main, ...kids) => fill(main, h('h2', null, 'السلم والتعبان'), ...kids);
+
+async function kidGame(main) {
+  let key = '', selected = new Set(), stopped = false;
+  const alive = () => document.body.contains(main) && state.tab === 'game' && !stopped;
+  const go = (id) => { stopped = true; gameScreen(main, id); };
+  const draw = (r) => {
+    if (!r.enabled) return gameShell(main, h('div', { class: 'card' }, h('p', { class: 'muted' }, 'اللعبة مقفولة دلوقتي. هتفتح لما الخادم يشغّلها.')));
+    const friends = r.online;
+    selected = new Set([...selected].filter((id) => friends.some((f) => f.id === id && !f.busy)));
+    const act2 = async (fn) => { const x = await act(fn); if (x && x.id) go(x.id); };
+    gameShell(main,
+      h('p', { class: 'muted small' }, `نجوم اللعبة النهارده: ${r.stars_today} من ${r.cap}. السؤال الصح على الخانة (؟) بنجمة.`),
+      r.invites.map((i) => h('div', { class: 'card stack', style: 'border-color:var(--star)' }, h('b', null, `${i.from} بيدعوك تلعب سلم وتعبان`),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn', type: 'button', onclick: () => act2(async () => { await api('POST', `/api/game/${i.id}/accept`); return { id: i.id }; }) }, 'قبول'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: async () => { await act(() => api('POST', `/api/game/${i.id}/decline`)); load(); } }, 'رفض')))),
+      h('div', { class: 'card stack' }, h('h3', null, 'العب ضد الكمبيوتر'), h('p', { class: 'muted' }, 'تلعب لوحدك في أي وقت.'),
+        h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: () => act2(() => api('POST', '/api/game/solo')) }, 'ابدأ')),
+      h('div', { class: 'card stack' }, h('h3', null, 'ادعو أصحابك'),
+        friends.length ? h('div', { class: 'list' }, friends.map((f) => h('label', { class: 'attrow', for: 'fr' + f.id },
+          h('input', { type: 'checkbox', id: 'fr' + f.id, checked: selected.has(f.id), disabled: f.busy, onchange: (e) => { if (e.target.checked) { if (selected.size >= 3) { e.target.checked = false; return toast('3 أصحاب بالكتير', true); } selected.add(f.id); } else selected.delete(f.id); } }),
+          avatar(f.id, f.photo, 30), h('span', { class: 'grow' }, f.name), f.busy && h('span', { class: 'pill' }, 'بيلعب')))) : h('p', { class: 'muted' }, 'مفيش حد من أصحابك فاتح اللعبة دلوقتي.'),
+        h('button', { class: 'btn', type: 'button', style: 'justify-self:start', disabled: !friends.length, onclick: () => act2(() => api('POST', '/api/game/invite', { friend_ids: [...selected] })) }, 'ابعت الدعوة')),
+      h('div', { class: 'card stack' }, h('h3', null, 'الكمبيوتر يختارلك صاحب'), h('p', { class: 'muted' }, 'بيختار واحد من الفاتحين اللعبة دلوقتي.'),
+        h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: () => act2(() => api('POST', '/api/game/random')) }, 'اختار لي')),
+      h('div', { class: 'card stack' }, h('h3', null, 'غرفة الكل'),
+        h('p', { class: 'muted' }, r.room ? `فيه غرفة مفتوحة: ${r.room.players.join('، ')}` : 'مفيش غرفة مفتوحة. ابدأ واحدة وغيرك ينضم.'),
+        h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: () => act2(() => api('POST', '/api/game/room')) }, r.room ? 'ادخل الغرفة' : 'ابدأ غرفة جديدة')));
+  };
+  const load = async () => {
+    if (!alive()) return;
+    let r; try { r = await api('GET', '/api/game/lobby'); } catch (e) { if (!alive()) return; r = null; }
+    if (!alive()) return;
+    if (r && r.mine) return go(r.mine);
+    if (r) { const k = JSON.stringify(r) + [...selected].join(); if (k !== key) { key = k; draw(r); } }
+    setTimeout(load, 3000);
+  };
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  load();
+  window.__lobbyReload = load;
+}
+
+function gameScreen(main, id) {
+  let last = '', stopped = false;
+  const alive = () => document.body.contains(main) && state.tab === 'game' && !stopped;
+  const box = h('div', { class: 'stack' });
+  gameShell(main, box);
+  const back = () => { stopped = true; kidGame(main); };
+  const leave = async () => { await act(() => api('POST', `/api/game/${id}/leave`)); back(); };
+  const draw = (v) => {
+    const names = (v.players || []);
+    const legend = h('div', { class: 'gb-legend' }, names.map((p, i) => h('div', { class: 'gb-pl' + (v.status === 'playing' && i === v.turn ? ' on' : '') + (p.status !== 'in' ? ' off' : '') },
+      h('i', { style: `background:${PAWN[p.color % 6]}` }), h('span', null, p.name + (i === v.me ? ' (إنت)' : '')), h('small', { class: 'num' }, p.status === 'invited' ? 'مستني الرد' : p.status === 'declined' ? 'رفض' : p.status === 'left' ? 'خرج' : p.pos ? String(p.pos) : 'البداية'))));
+    if (v.status === 'lobby') {
+      const isRoom = v.mode === 'room', host = v.host === (names[v.me] || {}).id;
+      return fill(box, h('div', { class: 'card stack' }, h('h3', null, isRoom ? 'غرفة الكل' : 'مستني أصحابك يردّوا'), legend,
+        h('p', { class: 'muted small' }, isRoom ? 'اللعبة هتبدأ لما اللي فتح الغرفة يضغط "ابدأ" (لاعبين اتنين على الأقل).' : 'الدعوة بتنتهي بعد دقيقة ونص.'),
+        h('div', { class: 'row' }, isRoom && host && h('button', { class: 'btn', type: 'button', disabled: names.filter((p) => p.status === 'in').length < 2, onclick: () => act(() => api('POST', `/api/game/${id}/start`)) }, 'ابدأ اللعبة'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: leave }, 'خروج'))));
+    }
+    if (v.status !== 'playing') {
+      const w = names.find((p) => p.id === v.winner && (p.bot || p.id === v.winner));
+      const mine = v.me >= 0 && names[v.me] && names[v.me].id === v.winner;
+      return fill(box, h('div', { class: 'card stack', style: 'text-align:center' },
+        h('h3', null, v.status === 'finished' ? (mine ? 'مبروك! كسبت' : `${w ? w.name : 'لاعب'} كسب اللعبة`) : 'اللعبة اتلغت'),
+        v.status === 'finished' && boardSvg(v.board, names, -1), legend, h('div', { class: 'list' }, v.log.slice().reverse().slice(0, 5).map((l) => h('div', { class: 'muted small' }, l))),
+        h('button', { class: 'btn', type: 'button', style: 'justify-self:center', onclick: back }, 'رجوع للعبة')));
+    }
+    const cur = names[v.turn];
+    const roll = async () => { const x = await act(() => api('POST', `/api/game/${id}/roll`)); if (x) { last = JSON.stringify(x); draw(x); } };
+    const answer = async (c) => {
+      const x = await act(() => api('POST', `/api/game/${id}/answer`, { choice: c })); if (!x) return;
+      toast(x.result && x.result.correct ? (x.result.star ? 'إجابة صح! خدت نجمة' : 'إجابة صح! (وصلت للحد اليومي للنجوم)') : 'إجابة غلط، حظ أوفر المرة الجاية', !(x.result && x.result.correct));
+      last = JSON.stringify(x); draw(x);
+    };
+    const qCard = v.phase === 'question' && v.q ? h('div', { class: 'card stack gq', style: 'border-color:var(--star)' },
+      h('b', null, v.my_turn ? 'سؤال إنجيل. جاوب صح وخد نجمة:' : `${cur.name} بيجاوب على سؤال...`), h('p', { style: 'font-size:1.05rem;font-weight:700' }, v.q.text),
+      v.my_turn && h('div', { class: 'stack' }, v.q.options.map((o, i) => h('button', { class: 'btn ghost block', type: 'button', onclick: () => answer(i) }, o)))) : null;
+    fill(box, h('div', { class: 'card stack' },
+      boardSvg(v.board, names, v.turn), legend,
+      h('div', { class: 'row between' },
+        h('div', null, h('b', null, v.my_turn ? 'دورك!' : `الدور على ${cur.name}`), h('div', { class: 'muted small num' }, v.my_turn ? `باقي ${v.secs_left} ثانية` : '')),
+        v.dice ? h('div', { class: 'dice num', 'aria-label': 'آخر رمية' }, String(v.dice)) : null),
+      v.my_turn && v.phase === 'roll' && h('button', { class: 'btn block', type: 'button', onclick: roll }, 'ارمي النرد'),
+      h('p', { class: 'muted small' }, `نجوم اللعبة النهارده: ${v.stars_today} من ${v.cap}`)),
+      qCard,
+      h('div', { class: 'card list' }, v.log.slice().reverse().slice(0, 6).map((l) => h('div', { class: 'small' }, l))),
+      h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: leave }, 'اخرج من اللعبة'));
+  };
+  const poll = async () => {
+    if (!alive()) return;
+    try {
+      const v = await api('GET', `/api/game/${id}`);
+      if (!alive()) return;
+      const k = JSON.stringify(v); if (k !== last) { last = k; draw(v); }
+    } catch (e) {
+      if (!alive()) return;
+      if (/مقفولة|مش مسموح|مش موجودة/.test(e.message)) { stopped = true; toast(e.message, true); return kidGame(main); }
+    }
+    setTimeout(poll, 1500);
+  };
+  fill(box, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  poll();
+}
+
+// ----- تحكم المسؤول في اللعبة -----
+async function gameAdminCard() {
+  const r = await act(() => api('GET', '/api/admin/game'));
+  if (!r) return null;
+  const box = h('div', { class: 'card stack' });
+  const reload = async () => { const x = await act(() => api('GET', '/api/admin/game')); if (x) paint(x); };
+  const paint = (r) => {
+    const cap = h('input', { id: 'gcap', type: 'number', min: 0, max: 50, value: String(r.cap), class: 'ltr', style: 'width:6rem' });
+    const qt = h('input', { id: 'gqt', placeholder: 'نص السؤال' });
+    const opts = [0, 1, 2, 3].map((i) => h('input', { 'aria-label': 'اختيار ' + (i + 1), placeholder: 'اختيار ' + (i + 1) + (i > 1 ? ' (اختياري)' : '') }));
+    const cor = h('select', { id: 'gqc', 'aria-label': 'الإجابة الصح' }, [0, 1, 2, 3].map((i) => h('option', { value: String(i) }, 'الإجابة الصح: اختيار ' + (i + 1))));
+    fill(box, h('h3', null, 'لعبة السلم والتعبان'),
+      h('div', { class: 'row between' },
+        h('div', null, h('b', null, r.enabled ? 'اللعبة شغالة' : 'اللعبة مقفولة'), h('div', { class: 'muted small' }, `فاتحين اللعبة دلوقتي: ${r.online} - ألعاب شغالة: ${r.playing}`)),
+        h('button', { class: r.enabled ? 'btn bad' : 'btn', type: 'button', onclick: async () => { await act(() => api('POST', '/api/admin/game', { enabled: !r.enabled }), r.enabled ? 'اتقفلت اللعبة' : 'اتفتحت اللعبة'); reload(); } }, r.enabled ? 'إيقاف اللعبة' : 'تشغيل اللعبة')),
+      h('div', { class: 'row' }, h('label', { for: 'gcap' }, 'أقصى نجوم من اللعبة لكل ولد في اليوم: '), cap,
+        h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { await act(() => api('POST', '/api/admin/game', { cap: Number(cap.value) }), 'تم الحفظ'); reload(); } }, 'حفظ')),
+      h('details', { class: 'stack' }, h('summary', null, `أسئلة الإنجيل (${r.questions.length})`),
+        h('div', { class: 'list' }, r.questions.map((q) => h('div', { class: 'row between', style: 'align-items:flex-start' },
+          h('div', { class: 'grow' }, h('div', null, q.text), h('div', { class: 'muted small' }, q.options.map((o, i) => (i === q.correct ? '✔ ' : '') + o).join(' | '))),
+          sureButton('حذف', 'تأكيد', async () => { await act(() => api('DELETE', `/api/admin/game-question/${q.id}`)); reload(); })))),
+        h('div', { class: 'stack' }, h('b', null, 'إضافة سؤال'), qt, opts, cor,
+          h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: async () => {
+            const o = opts.map((i) => i.value.trim()).filter(Boolean); const idx = Number(cor.value);
+            const x = await act(() => api('POST', '/api/admin/game-question', { text: qt.value, options: opts.map((i) => i.value), correct: idx }), 'تمت الإضافة'); if (x) reload();
+          } }, 'إضافة'))));
+  };
+  paint(r);
+  return box;
 }
 
 boot().catch(() => showAuth());

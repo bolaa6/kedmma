@@ -226,7 +226,7 @@ function renderKid() {
   if (state.tab === 'week') kidWeek(main);
   else if (state.tab === 'quiz') kidQuiz(main);
   else if (state.tab === 'game') kidGame(main);
-  else if (state.tab === 'library') libraryView(main, false);
+  else if (state.tab === 'library') mediaView(main, false);
   else if (state.tab === 'stars') kidStars(main);
   else kidProfile(main);
   window.scrollTo(0, 0);
@@ -307,6 +307,7 @@ async function kidStars(main) {
   const r = await act(() => api('GET', '/api/my-stars'));
   if (!r) return;
   const s = r.stars;
+  const rankCard = await kidRanking();
   const row = (label, n, hint) => h('div', { class: 'row between' }, h('span', null, label, hint && h('span', { class: 'muted small' }, ' ' + hint)), h('b', { class: 'num' }, (n > 0 && label.includes('الخدام') ? '+' : '') + n));
   fill(main, 
     h('div', { class: 'stars-hero' }, (() => { const x = icon('star'); x.setAttribute('class', 'big'); return x; })(),
@@ -320,6 +321,7 @@ async function kidStars(main) {
       row('المسابقة', s.quiz, 'نجمة لكل درجة'),
       s.game > 0 && row('لعبة السلم والتعبان', s.game, 'نجمة لكل سؤال صح'),
       row('زيادة أو خصم من الخدام', s.adjust)),
+    rankCard,
     r.notes.length > 0 && h('div', { class: 'card stack' }, h('h3', null, 'ملاحظات من الخدام'),
       h('div', { class: 'list' }, r.notes.map((n) => h('div', { class: 'row between', style: 'align-items:flex-start' },
         h('div', { class: 'grow' }, h('div', null, n.text), h('span', { class: 'muted small num' }, n.created_at.slice(0, 10))),
@@ -423,7 +425,7 @@ function renderStaff() {
   staffBirthdays(bdayBox);
   if (me.role === 'admin' && !state.openKid) api('GET', '/api/admin/reset-requests').then((q) => { if (q.requests.length) bdayBox.prepend(h('button', { class: 'notice', type: 'button', style: 'text-align:start;cursor:pointer', onclick: () => { state.tab = 'team'; renderStaff(); } }, `فيه ${q.requests.length} طلب نسيان كلمة سر. اضغط هنا لتشوفه.`)); }).catch(() => {});
   if (state.openKid) staffKid(main, state.openKid);
-  else if (state.tab === 'library') libraryView(main, me.role === 'admin');
+  else if (state.tab === 'library') mediaView(main, canMark());
   else if (state.tab === 'overview') staffOverview(main);
   else if (state.tab === 'attendance') staffAttendance(main);
   else if (state.tab === 'quiz') staffQuiz(main);
@@ -590,7 +592,8 @@ async function staffTeam(main) {
     role: h('select', { id: 'srole' }, h('option', { value: 'viewer' }, 'متابع (يشوف بس)'), h('option', { value: 'servant' }, 'خادم (يسجل الحضور والنجوم والملاحظات)')) };
   const reqCard = await resetRequestsCard(() => renderStaff());
   const gameCard = await gameAdminCard();
-  fill(main, reqCard, gameCard,
+  const lvCard = await levelCard();
+  fill(main, reqCard, gameCard, lvCard,
     h('div', { class: 'card stack' }, h('h3', null, 'الخدام والمتابعين'),
       h('div', { class: 'list' }, r.staff.map((u) => h('div', { class: 'row between' },
         h('div', null, h('b', null, u.name), h('div', { class: 'muted small ltr', style: 'text-align:start' }, u.phone)),
@@ -840,30 +843,31 @@ function resourceCard(r, admin, reload) {
     h('div', { class: 'row between', style: 'align-items:flex-start' }, h('div', { class: 'grow' }, h('b', null, r.title), r.description && h('p', { class: 'muted' }, r.description)),
       h('span', { class: 'pill' }, r.kind === 'video' ? 'فيديو' : 'رابط')),
     media,
-    h('div', { class: 'row' }, h('a', { class: 'btn ghost sm', href: safeHref(r.url), target: '_blank', rel: 'noopener noreferrer', style: 'text-decoration:none' }, r.kind === 'video' ? 'فتح في يوتيوب' : 'فتح الرابط'),
+    h('div', { class: 'row' }, h('a', { class: 'btn ghost sm', href: safeHref(r.url), target: '_blank', rel: 'noopener noreferrer', style: 'text-decoration:none' }, r.kind === 'video' ? (r.video_id ? 'فتح في يوتيوب' : 'فتح الفيديو') : 'فتح الرابط'),
       admin && sureButton('حذف', 'تأكيد الحذف', async () => { const x = await act(() => api('DELETE', `/api/admin/resource/${r.id}`), 'تم الحذف'); if (x) reload(); })));
 }
-async function libraryView(main, admin) {
+async function libraryView(main, admin, kind) {
   fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
   const load = async () => {
     const r = await act(() => api('GET', '/api/resources'));
     if (!r) return;
+    const items = r.resources.filter((x) => !kind || x.kind === kind);
     const title = h('input', { id: 'rtitle', placeholder: 'مثلاً: ترنيمة الأسبوع' });
     const url = h('input', { id: 'rurl', class: 'ltr', placeholder: 'https://www.youtube.com/watch?v=...', inputmode: 'url' });
     const desc = h('textarea', { id: 'rdesc', placeholder: 'وصف قصير (اختياري)', maxlength: 400 });
     const err = h('div', { class: 'err', hidden: true, role: 'alert' });
     const form = admin ? h('form', { class: 'card stack', novalidate: true, onsubmit: async (e) => {
       e.preventDefault(); err.hidden = true;
-      try { await api('POST', '/api/admin/resource', { title: title.value, url: url.value, description: desc.value }); toast('تمت الإضافة'); load(); }
+      try { await api('POST', '/api/admin/resource', { title: title.value, url: url.value, description: desc.value, kind }); toast('تمت الإضافة'); load(); }
       catch (ex) { err.textContent = ex.message; err.hidden = false; }
     } },
-      h('h3', null, 'إضافة رابط أو فيديو'),
+      h('h3', null, kind === 'video' ? 'إضافة فيديو' : 'إضافة رابط'),
       h('label', { class: 'f', for: 'rtitle' }, h('span', null, 'العنوان'), title),
-      h('label', { class: 'f', for: 'rurl' }, h('span', null, 'الرابط ', h('small', null, '(روابط يوتيوب بتتشغّل جوه الموقع)')), url),
+      h('label', { class: 'f', for: 'rurl' }, h('span', null, 'الرابط ', h('small', null, '(روابط يوتيوب بتتشغّل جوه الموقع، وأي رابط تاني زي جوجل درايف بيتفتح في صفحته)')), url),
       h('label', { class: 'f', for: 'rdesc' }, h('span', null, 'الوصف'), desc), err,
       h('button', { class: 'btn', type: 'submit' }, 'إضافة')) : null;
-    fill(main, h('h2', null, 'المكتبة'), form,
-      r.resources.length ? r.resources.map((x) => resourceCard(x, admin, load)) : h('div', { class: 'card' }, h('p', { class: 'muted' }, admin ? 'لسه ما ضفتش حاجة. أضف أول رابط أو فيديو من فوق.' : 'مفيش حاجة هنا لسه. هتظهر هنا الروابط والفيديوهات اللي بيضيفها الخادم.')));
+    fill(main, form,
+      items.length ? items.map((x) => resourceCard(x, admin, load)) : h('div', { class: 'card' }, h('p', { class: 'muted' }, admin ? 'لسه مفيش حاجة هنا. أضف أول واحد من فوق.' : 'مفيش حاجة هنا لسه. هتظهر لما الخدام يضيفوها.')));
   };
   load();
 }
@@ -1330,6 +1334,95 @@ async function gameAdminCard() {
   };
   paint(r);
   return box;
+}
+
+// ====================== المكتبة: صور / فيديوهات / روابط ======================
+let mediaTab = 'photos';
+function mediaView(main, canAdd) {
+  const body = h('div', { class: 'stack' });
+  const seg = (id, label) => h('button', { type: 'button', 'aria-pressed': String(mediaTab === id), onclick: () => { mediaTab = id; mediaView(main, canAdd); } }, label);
+  fill(main, h('h2', null, 'المكتبة'),
+    h('div', { class: 'seg', style: 'grid-template-columns:repeat(3,1fr)', role: 'group', 'aria-label': 'القسم' }, seg('photos', 'الصور'), seg('videos', 'الفيديوهات'), seg('links', 'الروابط')), body);
+  if (mediaTab === 'photos') galleryView(body, canAdd);
+  else libraryView(body, canAdd, mediaTab === 'videos' ? 'video' : 'link');
+}
+
+async function resizeTo(file, maxSide, quality) {
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch { throw new Error('الصورة دي مش مدعومة. جرّب JPG أو PNG'); }
+  const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', quality);
+}
+
+function lightbox(p, canDel, reload) {
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const ov = h('div', { class: 'lightbox', role: 'dialog', 'aria-modal': 'true', 'aria-label': p.title || 'صورة', onclick: (e) => { if (e.target === ov) close(); } },
+    h('div', { class: 'lb-box' },
+      h('img', { src: `/api/gallery/${p.id}/full`, alt: p.title || 'صورة من المعرض' }),
+      p.title && h('b', null, p.title),
+      h('div', { class: 'row', style: 'justify-content:center' },
+        h('a', { class: 'btn', href: `/api/gallery/${p.id}/full?dl=1`, download: `photo-${p.id}.jpg`, style: 'text-decoration:none' }, 'تحميل الصورة'),
+        canDel && sureButton('حذف', 'تأكيد الحذف', async () => { const x = await act(() => api('DELETE', `/api/gallery/${p.id}`), 'تم الحذف'); if (x) { close(); reload(); } }),
+        h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'إغلاق'))));
+  document.addEventListener('keydown', onKey);
+  document.body.append(ov);
+}
+
+async function galleryView(box, canAdd) {
+  fill(box, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const load = async () => {
+    const r = await act(() => api('GET', '/api/gallery'));
+    if (!r) return;
+    const status = h('p', { class: 'muted small', hidden: true });
+    const title = h('input', { id: 'gtitle', placeholder: 'عنوان للصور (اختياري)', maxlength: 80 });
+    const pick = h('input', { id: 'gfiles', type: 'file', accept: 'image/*', multiple: true, hidden: true, onchange: async (e) => {
+      const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
+      let done = 0, failed = 0; status.hidden = false;
+      for (const f of files) {
+        status.textContent = `جاري رفع الصورة ${done + failed + 1} من ${files.length}...`;
+        try { await api('POST', '/api/gallery', { title: title.value, thumb: await resizeTo(f, 360, 0.7), data: await resizeTo(f, 1600, 0.82) }); done++; }
+        catch (ex) { failed++; toast(ex.message, true); }
+      }
+      toast(`تم رفع ${done} صورة${failed ? ` وفشل ${failed}` : ''}`, !done); load();
+    } });
+    const form = canAdd ? h('div', { class: 'card stack' }, h('h3', null, 'إضافة صور'),
+      h('label', { class: 'f', for: 'gtitle' }, h('span', null, 'العنوان'), title),
+      h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: () => pick.click() }, 'اختار صور من الموبايل'), pick, status,
+      h('p', { class: 'muted small' }, 'تقدر تختار أكتر من صورة مرة واحدة. الصور بتتصغّر تلقائيًا عشان الموقع يفضل سريع.')) : null;
+    fill(box, form, r.photos.length ? h('div', { class: 'gallery' }, r.photos.map((p) =>
+      h('button', { class: 'g-item', type: 'button', 'aria-label': p.title || 'فتح الصورة', onclick: () => lightbox(p, canAdd, load) },
+        h('img', { src: `/api/gallery/${p.id}/thumb`, alt: p.title || '', loading: 'lazy' }), p.title && h('span', null, p.title))))
+      : h('div', { class: 'card' }, h('p', { class: 'muted' }, canAdd ? 'لسه ما رفعتش صور. اضغط "اختار صور" من فوق.' : 'مفيش صور لسه. هتظهر هنا لما الخدام يرفعوها.')));
+  };
+  load();
+}
+
+// ====================== ترتيب الأولاد بالأرقام (بدون أسماء) ======================
+async function kidRanking() {
+  const r = await act(() => api('GET', '/api/my-ranking'));
+  if (!r) return null;
+  const m = r.mine, pct = Math.max(4, Math.min(100, Math.round(((m.stars - (m.level - 1) * r.step) / r.step) * 100)));
+  return h('div', { class: 'card stack' },
+    h('div', { class: 'row between' }, h('h3', null, 'مستواك'), h('span', { class: 'pill star num' }, `المستوى ${m.level}`)),
+    h('div', { class: 'progress', role: 'progressbar', 'aria-valuenow': String(pct), 'aria-valuemin': '0', 'aria-valuemax': '100' }, h('i', { style: `width:${pct}%` })),
+    h('p', { class: 'muted small' }, `باقي ${r.to_next} نجمة للمستوى ${m.level + 1}. ترتيبك ${m.rank} من ${r.total}.`),
+    h('h3', null, 'الترتيب'),
+    h('div', { class: 'list' }, r.rows.map((x) => h('div', { class: 'row between' + (x.me ? ' me-row' : '') },
+      h('span', { class: 'row', style: 'flex-wrap:nowrap' }, h('span', { class: 'pill num', style: 'min-width:2rem;justify-content:center' }, String(x.rank)), h('span', null, x.me ? 'إنت' : `المستوى ${x.level}`), x.me && h('span', { class: 'muted small' }, `(المستوى ${x.level})`)),
+      h('span', { class: 'pill star num' }, String(x.stars), starIc())))),
+    h('p', { class: 'muted small' }, 'الترتيب بالأرقام بس، من غير أسماء.'));
+}
+
+async function levelCard() {
+  const r = await act(() => api('GET', '/api/admin/settings'));
+  if (!r) return null;
+  const inp = h('input', { id: 'lvstep', type: 'number', min: 5, max: 200, value: String(r.level_step), class: 'ltr', style: 'width:6rem' });
+  return h('div', { class: 'card stack' }, h('h3', null, 'مستويات الأولاد'),
+    h('p', { class: 'muted' }, 'الأولاد بيشوفوا مستواهم وترتيبهم بالأرقام بس. المستوى بيزيد كل كام نجمة:'),
+    h('div', { class: 'row' }, inp, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => act(() => api('POST', '/api/admin/settings', { level_step: Number(inp.value) }), 'تم الحفظ') }, 'حفظ')));
 }
 
 boot().catch(() => showAuth());

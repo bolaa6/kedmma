@@ -248,3 +248,16 @@ tr:last-child td { border-bottom: 0; }
 .gb-pl.on { border-color: var(--primary); background: var(--primary-soft); font-weight: 700; } .gb-pl.off { opacity: .5; }
 .gb-pl i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; }
 .dice { width: 52px; height: 52px; display: grid; place-items: center; font-size: 1.7rem; font-weight: 800; background: var(--surface-2); border: 2px solid var(--line); border-radius: 12px; }
+
+/* معرض الصور والمستويات */
+.gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+@media (min-width: 600px) { .gallery { grid-template-columns: repeat(5, 1fr); } }
+.g-item { position: relative; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface-2); aspect-ratio: 1; display: block; cursor: pointer; }
+.g-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.g-item span { position: absolute; inset-inline: 0; bottom: 0; background: rgba(0,0,0,.55); color: #fff; font-size: .72rem; padding: 3px 6px; text-align: start; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.lightbox { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.82); display: grid; place-items: center; padding: 14px; overflow: auto; }
+.lb-box { display: grid; gap: 12px; justify-items: center; max-width: 900px; width: 100%; color: #fff; }
+.lb-box img { max-width: 100%; max-height: 72vh; border-radius: 10px; object-fit: contain; }
+.progress { height: 12px; background: var(--surface-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+.progress i { display: block; height: 100%; background: var(--star); border-radius: 999px; }
+.me-row { background: var(--primary-soft); border-radius: 10px; padding: 4px 6px; font-weight: 700; }

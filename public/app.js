@@ -170,6 +170,7 @@ function showAuth(mode = 'login') {
         h('button', { type: 'button', 'aria-pressed': String(current === 'login'), onclick: () => { current = 'login'; draw(); } }, 'تسجيل الدخول'),
         h('button', { type: 'button', 'aria-pressed': String(current === 'register'), onclick: () => { current = 'register'; draw(); } }, 'حساب جديد')),
       form,
+      current === 'login' && h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:center', onclick: showForgot }, 'نسيت كلمة السر؟'),
       current === 'register' && h('p', { class: 'muted small' }, 'بعد التسجيل هتكمّل بياناتك (رقم ماما وبابا والعنوان وأب الاعتراف وغيرها).'));
   };
   draw();
@@ -185,6 +186,7 @@ async function boot() {
   const r = await api('GET', '/api/me');
   if (!r.user) { state.me = null; return showAuth(); }
   state.me = r;
+  if (r.must_change) return showForcedChange();
   if (r.user.role === 'kid') renderKid(); else renderStaff();
 }
 
@@ -405,7 +407,7 @@ function renderStaff() {
   document.body.className = 'staff';
   const me = state.me.user;
   if (!state.tab) state.tab = 'overview';
-  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع'], ['quiz', 'المسابقة'], ['reports', 'التقارير'], ['library', 'المكتبة']];
+  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع'], ['quiz', 'المسابقة'], ['reports', 'التقارير'], ['ranking', 'الترتيب'], ['library', 'المكتبة']];
   if (me.role === 'admin') tabs.push(['team', 'الخدام والإعدادات']);
   tabs.push(['me', 'حسابي']);
   const main = h('main', { class: 'stack' });
@@ -416,12 +418,14 @@ function renderStaff() {
       h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.staffContest = null; state.builder = null; state.openReport = null; renderStaff(); } }, label))),
     main));
   staffBirthdays(bdayBox);
+  if (me.role === 'admin' && !state.openKid) api('GET', '/api/admin/reset-requests').then((q) => { if (q.requests.length) bdayBox.prepend(h('button', { class: 'notice', type: 'button', style: 'text-align:start;cursor:pointer', onclick: () => { state.tab = 'team'; renderStaff(); } }, `فيه ${q.requests.length} طلب نسيان كلمة سر. اضغط هنا لتشوفه.`)); }).catch(() => {});
   if (state.openKid) staffKid(main, state.openKid);
   else if (state.tab === 'library') libraryView(main, me.role === 'admin');
   else if (state.tab === 'overview') staffOverview(main);
   else if (state.tab === 'attendance') staffAttendance(main);
   else if (state.tab === 'quiz') staffQuiz(main);
   else if (state.tab === 'reports') staffReports(main);
+  else if (state.tab === 'ranking') staffRanking(main);
   else if (state.tab === 'team') staffTeam(main);
   else staffMe(main);
 }
@@ -527,6 +531,7 @@ async function staffKid(main, id) {
             const x = await act(() => api('DELETE', `/api/admin/note/${n.id}`), 'تم الحذف'); if (x) renderStaff();
           } }, 'حذف'))))) : h('p', { class: 'muted' }, 'مفيش ملاحظات')),
     state.me.user.role === 'admin' && editKidCard(id, p, () => renderStaff()),
+    state.me.user.role === 'admin' && (() => { const mount = h('div'); return h('div', { class: 'card stack' }, h('h3', null, 'نسيت كلمة السر؟'), h('p', { class: 'muted' }, 'ولّد كلمة سر مؤقتة وابعتها له، وهو هيختار كلمة جديدة أول ما يدخل.'), h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: () => makeTempPassword(id, mount) }, 'كلمة سر مؤقتة'), mount); })(),
     state.me.user.role === 'admin' && h('div', { class: 'card stack' }, h('h3', null, 'تغيير كلمة سر الولد'),
       h('div', { class: 'row' }, (pw = h('input', { id: 'kidpw', class: 'ltr grow', placeholder: 'كلمة سر جديدة (6 على الأقل)', 'aria-label': 'كلمة سر جديدة' })),
         h('button', { class: 'btn', type: 'button', onclick: async () => { const x = await act(() => api('POST', '/api/admin/reset-password', { user_id: id, password: pw.value }), 'تم تغيير كلمة السر'); if (x) pw.value = ''; } }, 'تغيير'))),
@@ -580,7 +585,8 @@ async function staffTeam(main) {
   if (!r) return;
   const f = { name: h('input', { id: 'sname' }), phone: h('input', { id: 'sphone', class: 'ltr', type: 'tel' }), pw: h('input', { id: 'spw', class: 'ltr', placeholder: '6 على الأقل' }),
     role: h('select', { id: 'srole' }, h('option', { value: 'viewer' }, 'متابع (يشوف بس)'), h('option', { value: 'servant' }, 'خادم (يسجل الحضور والنجوم والملاحظات)')) };
-  fill(main, 
+  const reqCard = await resetRequestsCard(() => renderStaff());
+  fill(main, reqCard,
     h('div', { class: 'card stack' }, h('h3', null, 'الخدام والمتابعين'),
       h('div', { class: 'list' }, r.staff.map((u) => h('div', { class: 'row between' },
         h('div', null, h('b', null, u.name), h('div', { class: 'muted small ltr', style: 'text-align:start' }, u.phone)),
@@ -603,6 +609,7 @@ async function staffTeam(main) {
     h('div', { class: 'card stack' }, h('h3', null, 'بيانات الأولاد'),
       h('p', { class: 'muted' }, 'تنزيل ملف Excel فيه بيانات كل الأولاد وأرقام أهاليهم ومجموع نجومهم.'),
       h('a', { class: 'btn', href: '/api/admin/export.csv', style: 'text-decoration:none;justify-self:start' }, 'تنزيل الملف')),
+    auditCard(),
     h('p', { class: 'muted small' }, 'لتغيير كلمة سر ولد: افتح الولد من "متابعة الأسبوع" واستخدم خانة تغيير كلمة السر.'));
 }
 
@@ -1040,6 +1047,104 @@ async function reportView(main, id) {
   draw();
   fill(main, h('button', { class: 'btn ghost sm noprint', type: 'button', style: 'justify-self:start', onclick: () => { state.openReport = null; renderStaff(); } }, 'رجوع للتقارير'), area, actions);
   window.scrollTo(0, 0);
+}
+
+// ====================== نسيت كلمة السر ======================
+function showForgot() {
+  const phone = h('input', { id: 'fphone', class: 'ltr', type: 'tel', inputmode: 'tel', required: true, placeholder: '01xxxxxxxxx' });
+  const msg = h('div', { class: 'notice', hidden: true });
+  const err = h('div', { class: 'err', hidden: true, role: 'alert' });
+  fill(app, h('main', { class: 'auth' },
+    h('div', { class: 'hero' }, h('div', { class: 'mark' }, icon('cross')), h('h1', null, 'نسيت كلمة السر')),
+    h('form', { class: 'card stack', novalidate: true, onsubmit: async (e) => {
+      e.preventDefault(); err.hidden = true;
+      try { await api('POST', '/api/forgot', { phone: phone.value }); msg.textContent = 'وصل طلبك للمسؤول. هيبعتلك كلمة سر مؤقتة، وبعد ما تدخل بيها هتختار كلمة جديدة.'; msg.hidden = false; }
+      catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    } },
+      h('p', { class: 'muted' }, 'اكتب رقم موبايلك اللي سجّلت بيه، وهنبلّغ المسؤول.'),
+      h('label', { class: 'f', for: 'fphone' }, h('span', null, 'رقم موبايلك'), phone), err, msg,
+      h('button', { class: 'btn block', type: 'submit' }, 'ابعت الطلب'),
+      h('button', { class: 'btn ghost block', type: 'button', onclick: () => showAuth('login') }, 'رجوع لتسجيل الدخول'))));
+}
+function showForcedChange() {
+  const old = h('input', { id: 'fcold', type: 'text', class: 'ltr', autocomplete: 'current-password', required: true });
+  const nw = h('input', { id: 'fcnew', type: 'password', autocomplete: 'new-password', minlength: 6, required: true });
+  const err = h('div', { class: 'err', hidden: true, role: 'alert' });
+  fill(app, h('main', { class: 'auth' },
+    h('div', { class: 'hero' }, h('div', { class: 'mark' }, icon('cross')), h('h1', null, 'اختار كلمة سر جديدة')),
+    h('form', { class: 'card stack', novalidate: true, onsubmit: async (e) => {
+      e.preventDefault(); err.hidden = true;
+      try { await api('POST', '/api/password', { old: old.value, password: nw.value }); toast('تم تغيير كلمة السر'); await boot(); }
+      catch (ex) { err.textContent = ex.message; err.hidden = false; }
+    } },
+      h('p', { class: 'muted' }, 'دخلت بكلمة سر مؤقتة. اكتب الكلمة المؤقتة وبعدها كلمة سر جديدة تفتكرها.'),
+      h('label', { class: 'f', for: 'fcold' }, h('span', null, 'كلمة السر المؤقتة'), old),
+      h('label', { class: 'f', for: 'fcnew' }, h('span', null, 'كلمة السر الجديدة ', h('small', null, '(6 على الأقل)')), nw), err,
+      h('button', { class: 'btn block', type: 'submit' }, 'حفظ ودخول'),
+      h('button', { class: 'btn ghost block', type: 'button', onclick: logout }, 'تسجيل الخروج'))));
+}
+
+// كلمة سر مؤقتة: بتتولّد وتتعرض للمسؤول عشان يبعتها واتساب
+async function makeTempPassword(userId, mount, after) {
+  const r = await act(() => api('POST', '/api/admin/temp-password', { user_id: userId }));
+  if (!r) return;
+  const text = `كلمة السر المؤقتة لـ ${r.name}: ${r.password}\nادخل بيها على الموقع (${location.origin}) وهتختار كلمة سر جديدة.`;
+  const wa = (label, n) => n ? h('a', { class: 'btn sm', href: waLink(n, text), target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, label) : null;
+  fill(mount, h('div', { class: 'card stack', style: 'border-color:var(--good)' },
+    h('b', null, `كلمة السر المؤقتة لـ ${r.name}`),
+    h('div', { class: 'ltr num', style: 'font-size:1.6rem;font-weight:800;letter-spacing:2px;text-align:center;user-select:all' }, r.password),
+    h('p', { class: 'muted small' }, 'اتبعتها للولد أو لماما. الكلمة دي مش هتظهر تاني، والولد هيختار كلمة جديدة أول ما يدخل.'),
+    h('div', { class: 'row' }, wa('واتساب للولد', r.phone), wa('واتساب لماما', r.mother_phone), wa('واتساب لبابا', r.father_phone),
+      h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('تم النسخ'); } catch { toast('معرفناش ننسخ', true); } } }, 'نسخ'),
+      after && h('button', { class: 'btn ghost sm', type: 'button', onclick: after }, 'تمام'))));
+}
+async function resetRequestsCard(onChange) {
+  const r = await act(() => api('GET', '/api/admin/reset-requests'));
+  if (!r || !r.requests.length) return null;
+  return h('div', { class: 'card stack', style: 'border-color:var(--star)' }, h('h3', null, `طلبات نسيان كلمة السر (${r.requests.length})`),
+    r.requests.map((q) => { const mount = h('div'); return h('div', { class: 'stack' },
+      h('div', { class: 'row between' }, h('div', null, h('b', null, q.name), h('div', { class: 'muted small num' }, `${q.phone} - ${q.requested_at.slice(0, 16)}`)),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn sm', type: 'button', onclick: () => makeTempPassword(q.user_id, mount, onChange) }, 'كلمة سر مؤقتة'),
+          h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { await act(() => api('DELETE', `/api/admin/reset-request/${q.user_id}`)); onChange(); } }, 'تجاهل'))), mount); }));
+}
+function auditCard() {
+  const box = h('div', { class: 'card stack' });
+  const show = async () => {
+    const r = await act(() => api('GET', '/api/admin/audit')); if (!r) return;
+    fill(box, h('h3', null, 'سجل التعديلات (آخر 200)'),
+      r.items.length ? h('div', { class: 'list' }, r.items.map((i) => h('div', null,
+        h('div', null, h('b', null, i.action), i.target_name && ` - ${i.target_name}`),
+        i.detail && h('div', { class: 'muted small' }, i.detail),
+        h('div', { class: 'muted small num' }, `${i.at.slice(0, 16)} - ${i.by_name}`)))) : h('p', { class: 'muted' }, 'السجل فاضي لحد دلوقتي.'),
+      h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => fill(box, ...closed()) }, 'إخفاء'));
+  };
+  const closed = () => [h('h3', null, 'سجل التعديلات'), h('p', { class: 'muted' }, 'مين عدّل بيانات ولد، وزوّد أو خصم نجوم، وغيّر كلمة سر، وحذف إيه.'), h('button', { class: 'btn ghost', type: 'button', style: 'justify-self:start', onclick: show }, 'عرض السجل')];
+  fill(box, ...closed());
+  return box;
+}
+
+// ====================== ترتيب الأولاد (للخدام) ======================
+let rankMode = 'total';
+async function staffRanking(main) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const today = state.me.today.slice(0, 7);
+  const month = rankMode === 'month' ? today : rankMode === 'prev' ? shiftMonth(today, -1) : null;
+  const r = await act(() => api('GET', '/api/staff/leaderboard' + (month ? `?month=${month}` : '')));
+  if (!r) return;
+  const list = (month ? r.monthly : r.total).slice().sort((a, b) => b.stars - a.stars || a.name.localeCompare(b.name, 'ar'));
+  let rank = 0, prev = null;
+  const rows = list.map((k, i) => { if (k.stars !== prev) { rank = i + 1; prev = k.stars; } return { ...k, rank }; });
+  const seg = (id, label) => h('button', { type: 'button', 'aria-pressed': String(rankMode === id), onclick: () => { rankMode = id; staffRanking(main); } }, label);
+  fill(main, h('h2', null, 'ترتيب الأولاد'),
+    h('p', { class: 'muted small' }, 'الصفحة دي للمسؤول والخدام والمتابعين بس، والأولاد مش بيشوفوها.'),
+    h('div', { class: 'seg', style: 'grid-template-columns:repeat(3,1fr)', role: 'group', 'aria-label': 'الفترة' }, seg('total', 'الإجمالي'), seg('month', 'الشهر ده'), seg('prev', 'الشهر اللي فات')),
+    month && h('p', { class: 'muted small' }, 'نجوم ' + monthLabel(month)),
+    h('div', { class: 'card list' }, rows.length ? rows.map((k) => h('div', { class: 'row between' },
+      h('div', { class: 'row', style: 'flex-wrap:nowrap' },
+        h('span', { class: 'pill num' + (k.rank <= 3 && k.stars > 0 ? ' star' : ''), style: 'min-width:2rem;justify-content:center' }, String(k.rank)),
+        avatar(k.id, k.photo, 36), h('b', null, k.name)),
+      h('span', { class: 'pill star num' }, String(k.stars), starIc()))) : h('p', { class: 'muted' }, 'لسه مفيش أولاد.')));
 }
 
 boot().catch(() => showAuth());

@@ -393,7 +393,7 @@ function kidProfile(main) {
     h('p', { class: 'muted small' }, 'تقدر تعدّل بياناتك في أي وقت. مينفعش تتمسح بعد ما تتسجل.'));
   fill(main, 
     !p.complete && h('div', { class: 'notice' }, 'كمّل بياناتك الأول عشان الخدام يقدروا يتواصلوا مع أهلك.'),
-    photoBox, form, passwordCard(),
+    photoBox, form, installCard(), passwordCard(),
     h('button', { class: 'btn ghost', type: 'button', onclick: logout }, 'تسجيل الخروج'));
 }
 
@@ -405,7 +405,7 @@ function renderStaff() {
   document.body.className = 'staff';
   const me = state.me.user;
   if (!state.tab) state.tab = 'overview';
-  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع'], ['quiz', 'المسابقة'], ['library', 'المكتبة']];
+  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع'], ['quiz', 'المسابقة'], ['reports', 'التقارير'], ['library', 'المكتبة']];
   if (me.role === 'admin') tabs.push(['team', 'الخدام والإعدادات']);
   tabs.push(['me', 'حسابي']);
   const main = h('main', { class: 'stack' });
@@ -413,7 +413,7 @@ function renderStaff() {
   fill(app, h('div', { class: 'wrap wide' },
     header(`${me.name} (${ROLE_LABEL[me.role]})`), bdayBox,
     state.openKid ? '' : h('nav', { class: 'tabs', 'aria-label': 'التنقل' }, tabs.map(([id, label]) =>
-      h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.staffContest = null; state.builder = null; renderStaff(); } }, label))),
+      h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.staffContest = null; state.builder = null; state.openReport = null; renderStaff(); } }, label))),
     main));
   staffBirthdays(bdayBox);
   if (state.openKid) staffKid(main, state.openKid);
@@ -421,6 +421,7 @@ function renderStaff() {
   else if (state.tab === 'overview') staffOverview(main);
   else if (state.tab === 'attendance') staffAttendance(main);
   else if (state.tab === 'quiz') staffQuiz(main);
+  else if (state.tab === 'reports') staffReports(main);
   else if (state.tab === 'team') staffTeam(main);
   else staffMe(main);
 }
@@ -525,6 +526,7 @@ async function staffKid(main, id) {
             if (!e.currentTarget.dataset.sure) { e.currentTarget.dataset.sure = '1'; e.currentTarget.textContent = 'تأكيد الحذف'; return; }
             const x = await act(() => api('DELETE', `/api/admin/note/${n.id}`), 'تم الحذف'); if (x) renderStaff();
           } }, 'حذف'))))) : h('p', { class: 'muted' }, 'مفيش ملاحظات')),
+    state.me.user.role === 'admin' && editKidCard(id, p, () => renderStaff()),
     state.me.user.role === 'admin' && h('div', { class: 'card stack' }, h('h3', null, 'تغيير كلمة سر الولد'),
       h('div', { class: 'row' }, (pw = h('input', { id: 'kidpw', class: 'ltr grow', placeholder: 'كلمة سر جديدة (6 على الأقل)', 'aria-label': 'كلمة سر جديدة' })),
         h('button', { class: 'btn', type: 'button', onclick: async () => { const x = await act(() => api('POST', '/api/admin/reset-password', { user_id: id, password: pw.value }), 'تم تغيير كلمة السر'); if (x) pw.value = ''; } }, 'تغيير'))),
@@ -605,7 +607,7 @@ async function staffTeam(main) {
 }
 
 function staffMe(main) {
-  fill(main, h('div', { class: 'wrap stack' }, passwordCard(), h('button', { class: 'btn ghost', type: 'button', onclick: logout }, 'تسجيل الخروج')));
+  fill(main, h('div', { class: 'wrap stack' }, canMark() && pushCard(), installCard(), passwordCard(), h('button', { class: 'btn ghost', type: 'button', onclick: logout }, 'تسجيل الخروج')));
 }
 
 
@@ -853,6 +855,191 @@ async function libraryView(main, admin) {
       r.resources.length ? r.resources.map((x) => resourceCard(x, admin, load)) : h('div', { class: 'card' }, h('p', { class: 'muted' }, admin ? 'لسه ما ضفتش حاجة. أضف أول رابط أو فيديو من فوق.' : 'مفيش حاجة هنا لسه. هتظهر هنا الروابط والفيديوهات اللي بيضيفها الخادم.')));
   };
   load();
+}
+
+// ====================== تثبيت التطبيق والتنبيهات ======================
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+let deferredInstall = null;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; });
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+function installCard() {
+  if (isStandalone()) return null;
+  const steps = h('p', { class: 'muted', hidden: true });
+  return h('div', { class: 'card stack' },
+    h('h3', null, 'أيقونة على شاشة الموبايل'),
+    h('p', { class: 'muted' }, 'ضيف الموقع على الشاشة الرئيسية وافتحه زي أي تطبيق.'),
+    h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: async () => {
+      if (deferredInstall) { deferredInstall.prompt(); await deferredInstall.userChoice.catch(() => {}); deferredInstall = null; return; }
+      steps.textContent = isIOS()
+        ? 'على الآيفون: افتح الموقع من Safari، اضغط زر المشاركة (المربع اللي فيه سهم لفوق)، ثم "إضافة إلى الشاشة الرئيسية".'
+        : 'على الأندرويد: من قايمة المتصفح (النقط التلاتة فوق) اختار "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية".';
+      steps.hidden = false;
+    } }, 'ضيفه للشاشة الرئيسية'), steps);
+}
+
+const urlB64 = (s) => { const b = (s + '='.repeat((4 - (s.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'); return Uint8Array.from(atob(b), (c) => c.charCodeAt(0)); };
+function pushCard() {
+  const box = h('div', { class: 'card stack' });
+  const draw = async () => {
+    const title = h('h3', null, 'تنبيهات أعياد الميلاد على الموبايل');
+    const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    if (!ok) {
+      return fill(box, title, h('p', { class: 'muted' }, isIOS()
+        ? 'على الآيفون لازم تضيف الموقع للشاشة الرئيسية الأول (من زر المشاركة)، وتفتحه من الأيقونة، وبعدين ترجع هنا وتفعّل التنبيهات.'
+        : 'المتصفح ده مش بيدعم التنبيهات. جرّب Chrome على الأندرويد.'));
+    }
+    let sub = null;
+    try { sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); } catch { /* تجاهل */ }
+    if (Notification.permission === 'denied') return fill(box, title, h('p', { class: 'notice' }, 'التنبيهات مقفولة من إعدادات المتصفح للموقع ده. افتحها من هناك وارجع جرّب.'));
+    if (sub) {
+      return fill(box, title, h('p', null, 'التنبيهات شغالة على الجهاز ده. هيجيلك إشعار الصبح في يوم عيد ميلاد أي ولد.'),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn ghost sm', type: 'button', onclick: () => act(() => api('POST', '/api/push/test'), 'اتبعت إشعار تجريبي') }, 'جرّب إشعار تجريبي'),
+          h('button', { class: 'btn bad sm', type: 'button', onclick: async () => {
+            await act(() => api('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint })); await sub.unsubscribe().catch(() => {}); draw();
+          } }, 'إيقاف التنبيهات')));
+    }
+    fill(box, title, h('p', { class: 'muted' }, 'فعّل التنبيهات عشان يوصلك إشعار على الموبايل حتى لو الموقع مقفول.'),
+      h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: async () => {
+        try {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') throw new Error('لازم توافق على التنبيهات');
+          const { key } = await api('GET', '/api/push/key');
+          const s = await (await navigator.serviceWorker.ready).pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64(key) });
+          await api('POST', '/api/push/subscribe', { endpoint: s.endpoint });
+          toast('تم تفعيل التنبيهات');
+        } catch (ex) { toast(ex.message || 'معرفناش نفعّل التنبيهات', true); }
+        draw();
+      } }, 'تفعيل التنبيهات'));
+  };
+  draw();
+  return box;
+}
+
+// ====================== تعديل بيانات الولد (للمسؤول) ======================
+function editKidCard(id, p, onSaved) {
+  const box = h('div', { class: 'card stack' });
+  const open = () => {
+    const d = JSON.parse(JSON.stringify(p));
+    const b0 = d.birth ? d.birth.split('-').map(Number) : null;
+    const inp = (idn, label, attrs) => h('label', { class: 'f', for: 'ek' + idn }, h('span', null, label), h('input', { id: 'ek' + idn, value: d[idn] || '', ...attrs }));
+    const f = { name: inp('name', 'الاسم'), phone: inp('phone', 'موبايل الولد (للدخول)', { class: 'ltr', type: 'tel' }),
+      mother_phone: inp('mother_phone', 'موبايل ماما', { class: 'ltr', type: 'tel' }), father_phone: inp('father_phone', 'موبايل بابا', { class: 'ltr', type: 'tel' }) };
+    const val = (k) => f[k].querySelector('input').value;
+    const addr = h('textarea', { id: 'ekaddress' }); addr.value = d.address || '';
+    const conf = inp('confessor', 'أب الاعتراف'), school = inp('school', 'المدرسة');
+    const sel = (idn, label, opts, cur) => h('label', { class: 'f', for: idn }, h('span', null, label),
+      h('select', { id: idn }, h('option', { value: '' }, '—'), opts.map(([v, t]) => h('option', { value: String(v), selected: cur === v }, t))));
+    const bd = sel('ekbd', 'اليوم', Array.from({ length: 31 }, (_, i) => [i + 1, String(i + 1)]), b0 && b0[2]);
+    const bm = sel('ekbm', 'الشهر', MONTH_NAMES.map((m, i) => [i + 1, m]), b0 && b0[1]);
+    const by = sel('ekby', 'السنة', Array.from({ length: 28 }, (_, i) => { const y = new Date().getFullYear() - 3 - i; return [y, String(y)]; }), b0 && b0[0]);
+    const sibBox = h('div', { class: 'stack' });
+    const drawSibs = () => fill(sibBox,
+      d.siblings.map((s, i) => h('div', { class: 'sib' },
+        h('label', { class: 'f nm', for: 'eksn' + i }, h('span', null, 'الاسم'), h('input', { id: 'eksn' + i, value: s.name, oninput: (e) => { s.name = e.target.value; } })),
+        h('label', { class: 'f', for: 'eksa' + i }, h('span', null, 'السن'), h('input', { id: 'eksa' + i, type: 'number', value: s.age, oninput: (e) => { s.age = e.target.value; } })),
+        h('label', { class: 'f', for: 'eksg' + i }, h('span', null, 'السنة الدراسية'), h('input', { id: 'eksg' + i, value: s.grade, oninput: (e) => { s.grade = e.target.value; } })),
+        h('button', { class: 'btn bad sm', type: 'button', onclick: () => { d.siblings.splice(i, 1); drawSibs(); } }, 'حذف'))),
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => { d.siblings.push({ name: '', age: '', grade: '' }); drawSibs(); } }, 'إضافة أخ أو أخت'));
+    drawSibs();
+    const err = h('div', { class: 'err', hidden: true, role: 'alert' });
+    fill(box, h('h3', null, 'تعديل بيانات الولد'), f.name, f.phone,
+      h('div', { class: 'grid2' }, f.mother_phone, f.father_phone),
+      h('label', { class: 'f', for: 'ekaddress' }, h('span', null, 'العنوان'), addr), conf, school,
+      h('h3', null, 'تاريخ الميلاد'), h('div', { class: 'grid3' }, bd, bm, by),
+      h('h3', null, 'الإخوات'), sibBox, err,
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', type: 'button', onclick: async () => {
+          err.hidden = true;
+          try {
+            await api('PUT', `/api/admin/kid/${id}`, { name: val('name'), phone: val('phone'), mother_phone: val('mother_phone'), father_phone: val('father_phone'),
+              address: addr.value, confessor: conf.querySelector('input').value, school: school.querySelector('input').value, siblings: d.siblings,
+              birth: { day: bd.querySelector('select').value, month: bm.querySelector('select').value, year: by.querySelector('select').value } });
+            toast('تم حفظ التعديلات'); onSaved();
+          } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+        } }, 'حفظ التعديلات'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'إلغاء')));
+  };
+  const close = () => fill(box, h('div', { class: 'row between' }, h('div', null, h('h3', null, 'تعديل بيانات الولد'), h('p', { class: 'muted small' }, 'لو الولد كتب رقم أو تاريخ غلط تقدر تصلحه من هنا.')),
+    h('button', { class: 'btn', type: 'button', onclick: open }, 'تعديل')));
+  close();
+  return box;
+}
+
+// ====================== التقرير الشهري ======================
+let reportMonth = null;
+const shiftMonth = (m, n) => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+const waLink = (phone, text) => {
+  let n = String(phone || '').replace(/\D/g, '');
+  if (/^0\d{10}$/.test(n)) n = '20' + n.slice(1);
+  return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
+};
+function reportText(r, showNotes) {
+  const of = (n, t) => `${n} من ${t}`;
+  const lines = [`السلام عليكم ورحمة الله، تقرير شهر ${monthLabel(r.month)} للولد ${r.kid ? r.kid.name : r.name}:`, '',
+    `- الصلاة: ${of(r.prayer, r.elapsed)} يوم`, `- قراءة الإنجيل: ${of(r.gospel, r.elapsed)} يوم`,
+    `- القداس: ${r.mass} مرة`, `- الاعتراف: ${r.confession ? 'تم' : 'لم يتم بعد'}`,
+    `- حضور الاجتماع: ${r.meetings ? of(r.attendance.length, r.meetings) + ' اجتماع' : 'لا توجد اجتماعات مسجلة'}`];
+  if (r.quizzes.length) lines.push('- المسابقات: ' + r.quizzes.map((q) => q.submitted ? `${q.title} (${q.score} من ${q.max})` : `${q.title} (لم يشارك)`).join('، '));
+  if (showNotes && r.notes.length) { lines.push('', 'ملاحظات:'); r.notes.forEach((n) => lines.push(`- ${n.text}${n.delta ? ` (${n.delta > 0 ? '+' : ''}${n.delta} نجمة)` : ''}`)); }
+  lines.push('', `إجمالي نجوم الشهر: ${r.stars}`, '', 'ربنا يبارك حياته ويحفظه لكم.');
+  return lines.join('\n');
+}
+async function staffReports(main) {
+  if (!reportMonth) reportMonth = state.me.today.slice(0, 7);
+  if (state.openReport) return reportView(main, state.openReport);
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', `/api/staff/report?month=${reportMonth}`));
+  if (!r) return;
+  const isCur = reportMonth >= state.me.today.slice(0, 7);
+  const cell = (n, t) => h('td', { class: 'num' }, t === undefined ? String(n) : `${n}/${t}`);
+  fill(main, h('h2', null, 'التقارير الشهرية'),
+    h('div', { class: 'weeknav' },
+      h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { reportMonth = shiftMonth(reportMonth, -1); renderStaff(); } }, 'الشهر اللي فات'),
+      h('b', null, monthLabel(reportMonth) + (r.running ? ' (لسه شغال)' : '')),
+      h('button', { class: 'btn ghost sm', type: 'button', disabled: isCur, onclick: () => { reportMonth = shiftMonth(reportMonth, 1); renderStaff(); } }, 'الشهر الجاي')),
+    h('p', { class: 'muted small' }, 'اضغط على اسم الولد لفتح تقريره وإرساله لأهله أو طباعته.'),
+    h('div', { class: 'tablebox' }, h('table', null,
+      h('thead', null, h('tr', null, ['الاسم', 'الصلاة', 'الإنجيل', 'القداس', 'الاعتراف', 'الاجتماع', 'المسابقات', 'نجوم الشهر'].map((t) => h('th', null, t)))),
+      h('tbody', null, r.kids.length ? r.kids.map((k) => {
+        const qs = k.quizzes.filter((q) => q.submitted);
+        return h('tr', { class: 'click', tabindex: 0, onclick: () => { state.openReport = k.id; renderStaff(); }, onkeydown: (e) => { if (e.key === 'Enter') { state.openReport = k.id; renderStaff(); } } },
+          h('td', null, h('b', null, k.name)), cell(k.prayer, r.elapsed), cell(k.gospel, r.elapsed), cell(k.mass),
+          h('td', null, k.confession ? h('span', { class: 'pill good' }, 'تم') : '-'), cell(k.attendance.length, k.meetings),
+          h('td', { class: 'num' }, k.quizzes.length ? `${qs.length}/${k.quizzes.length}` : '-'), h('td', null, h('span', { class: 'pill star num' }, String(k.stars), starIc())));
+      }) : h('tr', null, h('td', { colspan: 8, style: 'text-align:center;padding:24px' }, 'لسه مفيش أولاد'))))));
+}
+async function reportView(main, id) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', `/api/staff/report/${id}?month=${reportMonth}`));
+  if (!r) { state.openReport = null; return renderStaff(); }
+  let showNotes = false;
+  const area = h('div', { class: 'card stack report' });
+  const actions = h('div', { class: 'card stack noprint' });
+  const row = (l, v) => h('tr', null, h('th', null, l), h('td', null, v));
+  const draw = () => {
+    fill(area, h('h2', null, `تقرير ${monthLabel(r.month)}`), h('h3', null, r.kid.name),
+      h('div', { class: 'tablebox' }, h('table', null, h('tbody', null,
+        row('الصلاة', `${r.prayer} يوم من ${r.elapsed}`), row('قراءة الإنجيل', `${r.gospel} يوم من ${r.elapsed}`),
+        row('القداس', `${r.mass} مرة`), row('الاعتراف', r.confession ? 'تم' : 'لم يتم بعد'),
+        row('حضور الاجتماع', r.meetings ? `${r.attendance.length} من ${r.meetings}` : 'لا توجد اجتماعات مسجلة'),
+        row('نجوم الشهر', String(r.stars))))),
+      r.quizzes.length ? h('div', null, h('h3', null, 'المسابقات'), r.quizzes.map((q) => h('div', { class: 'row between' }, h('span', null, q.title),
+        q.submitted ? h('span', { class: 'pill good num' }, `${q.score} من ${q.max}${q.pending ? ' (في انتظار التصحيح)' : ''}`) : h('span', { class: 'pill bad' }, 'لم يشارك')))) : null,
+      showNotes && r.notes.length ? h('div', null, h('h3', null, 'ملاحظات'), r.notes.map((n) => h('div', null, `${n.day}: ${n.text}${n.delta ? ` (${n.delta > 0 ? '+' : ''}${n.delta} نجمة)` : ''}`))) : null);
+    const text = reportText(r, showNotes);
+    const wa = (label, phone) => phone ? h('a', { class: 'btn', href: waLink(phone, text), target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, label) : h('button', { class: 'btn ghost', type: 'button', disabled: true }, label + ' (مفيش رقم)');
+    fill(actions, h('label', { class: 'attrow' }, h('input', { type: 'checkbox', checked: showNotes, onchange: (e) => { showNotes = e.target.checked; draw(); } }), h('span', null, 'إظهار الملاحظات في التقرير')),
+      h('div', { class: 'row' }, wa('واتساب لماما', r.kid.mother_phone), wa('واتساب لبابا', r.kid.father_phone)),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn ghost', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('تم نسخ التقرير'); } catch { toast('معرفناش ننسخ', true); } } }, 'نسخ النص'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => window.print() }, 'طباعة / حفظ PDF')));
+  };
+  draw();
+  fill(main, h('button', { class: 'btn ghost sm noprint', type: 'button', style: 'justify-self:start', onclick: () => { state.openReport = null; renderStaff(); } }, 'رجوع للتقارير'), area, actions);
+  window.scrollTo(0, 0);
 }
 
 boot().catch(() => showAuth());

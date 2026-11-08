@@ -144,7 +144,7 @@ function header(sub) {
 // ---------- الدخول والتسجيل ----------
 function showAuth(mode = 'login') {
   document.body.className = '';
-  let current = mode;
+  let current = mode, registered = false;
   const box = h('div', { class: 'stack' });
   const draw = () => {
     const err = h('div', { class: 'err', hidden: true, role: 'alert' });
@@ -154,10 +154,11 @@ function showAuth(mode = 'login') {
     const form = h('form', { class: 'stack', novalidate: true, onsubmit: async (e) => {
       e.preventDefault(); err.hidden = true;
       try {
-        if (current === 'login') await api('POST', '/api/login', { phone: phone.value, password: pw.value });
-        else await api('POST', '/api/register', { name: name.value, phone: phone.value, password: pw.value });
-        state.tab = current === 'register' ? 'profile' : null;
-        await boot();
+        if (current === 'login') { await api('POST', '/api/login', { phone: phone.value, password: pw.value }); state.tab = null; await boot(); }
+        else {
+          await api('POST', '/api/register', { name: name.value, phone: phone.value, password: pw.value });
+          registered = true; current = 'login'; draw(); // الحساب مستني الموافقة
+        }
       } catch (ex) { err.textContent = ex.message; err.hidden = false; }
     } },
       current === 'register' && h('label', { class: 'f', for: 'name' }, h('span', null, 'اسمك بالكامل'), name),
@@ -169,9 +170,10 @@ function showAuth(mode = 'login') {
       h('div', { class: 'seg', role: 'group', 'aria-label': 'نوع الدخول' },
         h('button', { type: 'button', 'aria-pressed': String(current === 'login'), onclick: () => { current = 'login'; draw(); } }, 'تسجيل الدخول'),
         h('button', { type: 'button', 'aria-pressed': String(current === 'register'), onclick: () => { current = 'register'; draw(); } }, 'حساب جديد')),
+      registered && current === 'login' && h('div', { class: 'notice' }, 'تم إنشاء حسابك. لازم المسؤول أو الخادم يوافق عليه الأول، وبعدها تقدر تدخل برقمك وكلمة السر.'),
       form,
       current === 'login' && h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:center', onclick: showForgot }, 'نسيت كلمة السر؟'),
-      current === 'register' && h('p', { class: 'muted small' }, 'بعد التسجيل هتكمّل بياناتك (رقم ماما وبابا والعنوان وأب الاعتراف وغيرها).'));
+      current === 'register' && h('p', { class: 'muted small' }, 'بعد التسجيل لازم المسؤول أو الخادم يوافق على حسابك، وبعدها تكمّل بياناتك (رقم ماما وبابا والعنوان وأب الاعتراف وغيرها).'));
   };
   draw();
   fill(app, h('main', { class: 'auth' },
@@ -423,6 +425,7 @@ function renderStaff() {
       h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.staffContest = null; state.builder = null; state.openReport = null; renderStaff(); } }, label))),
     main));
   staffBirthdays(bdayBox);
+  if (canMark() && !state.openKid) api('GET', '/api/staff/pending').then((q) => { if (q.pending.length) bdayBox.prepend(pendingCard(q.pending, () => renderStaff())); }).catch(() => {});
   if (me.role === 'admin' && !state.openKid) api('GET', '/api/admin/reset-requests').then((q) => { if (q.requests.length) bdayBox.prepend(h('button', { class: 'notice', type: 'button', style: 'text-align:start;cursor:pointer', onclick: () => { state.tab = 'team'; renderStaff(); } }, `فيه ${q.requests.length} طلب نسيان كلمة سر. اضغط هنا لتشوفه.`)); }).catch(() => {});
   if (state.openKid) staffKid(main, state.openKid);
   else if (state.tab === 'library') mediaView(main, canMark());
@@ -870,6 +873,16 @@ async function libraryView(main, admin, kind) {
       items.length ? items.map((x) => resourceCard(x, admin, load)) : h('div', { class: 'card' }, h('p', { class: 'muted' }, admin ? 'لسه مفيش حاجة هنا. أضف أول واحد من فوق.' : 'مفيش حاجة هنا لسه. هتظهر لما الخدام يضيفوها.')));
   };
   load();
+}
+
+function pendingCard(list, onChange) {
+  return h('div', { class: 'card stack', style: 'border-color:var(--star)' }, h('h3', null, `حسابات جديدة مستنية موافقتك (${list.length})`),
+    h('p', { class: 'muted small' }, 'اتأكد إنه ولد من الفصل قبل ما توافق. اللي مش معروف ارفضه وهيتمسح.'),
+    list.map((p) => h('div', { class: 'row between' },
+      h('div', null, h('b', null, p.name), h('div', { class: 'muted small num' }, `${p.phone} - ${p.created_at.slice(0, 16)}`)),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn sm', type: 'button', onclick: async () => { const x = await act(() => api('POST', `/api/staff/pending/${p.id}/approve`), 'تم قبول الحساب'); if (x) onChange(); } }, 'قبول'),
+        sureButton('رفض', 'تأكيد الرفض', async () => { const x = await act(() => api('POST', `/api/staff/pending/${p.id}/reject`), 'تم رفض الحساب'); if (x) onChange(); })))));
 }
 
 // ====================== تثبيت التطبيق والتنبيهات ======================

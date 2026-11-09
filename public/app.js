@@ -35,6 +35,10 @@ function icon(name) {
     cake: 'M12 1.5c.9 1.1.9 2.2 0 3.3-.9-1.1-.9-2.2 0-3.3zM11 6h2v2.5h5A2 2 0 0120 10.5V13c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2v-2.5a2 2 0 012-2h5zM4 16.5h16V21H4z',
     book: 'M4 4.5C4 4.2 4.2 4 4.5 4H10a3 3 0 013 3v13a2 2 0 00-2-2H4.5a.5.5 0 01-.5-.5zm16 0c0-.3-.2-.5-.5-.5H14a3 3 0 00-3 3v13a2 2 0 012-2h6.5c.3 0 .5-.2.5-.5z',
     trophy: 'M6 2h12v2h3v4c0 2.2-1.8 4-4 4h-.3A5 5 0 0113 15.9V18h3v2H8v-2h3v-2.1A5 5 0 017.3 12H7C4.8 12 3 10.2 3 8V4h3zm0 4H5v2c0 1.1.9 2 2 2zm12 0v4c1.1 0 2-.9 2-2V6z',
+    chart: 'M4 20V4h2v14h14v2zm4-4v-5h3v5zm5 0V8h3v8zm5 0v-3h3v3z',
+    podium: 'M9 9h6v11H9zM2 13h6v7H2zm14 4h6v3h-6zM12 2l1.2 2.5 2.8.4-2 2 .5 2.8L12 8.3 9.5 9.7 10 6.9l-2-2 2.8-.4z',
+    tune: 'M3 6h9v2H3zm13 0h5v2h-5zM12 4h2v6h-2zM3 11h5v2H3zm9 0h9v2h-9zM8 9h2v6H8zM3 16h11v2H3zm15 0h3v2h-3zM14 14h2v6h-2z',
+    more: 'M5 10.2a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6zm7 0a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6zm7 0a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6z',
     moon: 'M20.5 14.5A8.5 8.5 0 019.5 3.5 8.5 8.5 0 1020.5 14.5z',
     sun: 'M12 7a5 5 0 100 10 5 5 0 000-10zM11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1l1.4-1.4 2.1 2.1-1.4 1.4zM5.6 19.8l-1.4-1.4 2.1-2.1 1.4 1.4zM17.7 7.7l-1.4-1.4 2.1-2.1 1.4 1.4z',
   };
@@ -414,16 +418,22 @@ function renderStaff() {
   document.body.className = 'staff';
   const me = state.me.user;
   if (!state.tab) state.tab = 'overview';
-  const tabs = [['overview', 'متابعة الأسبوع'], ['attendance', 'حضور الاجتماع'], ['quiz', 'المسابقة'], ['reports', 'التقارير'], ['ranking', 'الترتيب'], ['library', 'المكتبة']];
-  if (me.role === 'admin') tabs.push(['team', 'الخدام والإعدادات']);
-  tabs.push(['me', 'حسابي']);
+  const tabs = [['overview', 'المتابعة', 'week', 1], ['attendance', 'الحضور', 'check', 1], ['quiz', 'المسابقة', 'trophy', 1], ['library', 'المكتبة', 'book', 1],
+    ['reports', 'التقارير', 'chart', 0], ['ranking', 'الترتيب', 'podium', 0]];
+  if (me.role === 'admin') tabs.push(['team', 'الخدام والإعدادات', 'tune', 0]);
+  tabs.push(['me', 'حسابي', 'user', 0]);
+  const go = (id) => { state.tab = id; state.openKid = null; state.staffContest = null; state.builder = null; state.openReport = null; renderStaff(); };
+  const secActive = tabs.some(([id, , , p]) => !p && id === state.tab);
+  const sheet = h('div', { class: 'snav-sheet', hidden: true },
+    tabs.filter((t) => !t[3]).map(([id, label, ic]) => h('button', { type: 'button', 'aria-current': !state.openKid && state.tab === id ? 'page' : null, onclick: () => go(id) }, icon(ic), label)));
+  const moreBtn = h('button', { type: 'button', class: 'more', 'aria-expanded': 'false', 'aria-current': !state.openKid && secActive ? 'page' : null,
+    onclick: (e) => { e.stopPropagation(); const open = sheet.hidden; sheet.hidden = !open; moreBtn.setAttribute('aria-expanded', String(open)); } }, icon('more'), 'المزيد');
+  const nav = h('nav', { class: 'snav', 'aria-label': 'التنقل' },
+    tabs.map(([id, label, ic, p]) => h('button', { type: 'button', class: p ? '' : 'sec', 'aria-current': !state.openKid && state.tab === id ? 'page' : null, onclick: () => go(id) }, icon(ic), label)), moreBtn);
+  document.addEventListener('click', () => { sheet.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); }, { once: true });
   const main = h('main', { class: 'stack' });
   const bdayBox = h('div', { class: 'stack' });
-  fill(app, h('div', { class: 'wrap wide' },
-    header(`${me.name} (${ROLE_LABEL[me.role]})`), bdayBox,
-    state.openKid ? '' : h('nav', { class: 'tabs', 'aria-label': 'التنقل' }, tabs.map(([id, label]) =>
-      h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.staffContest = null; state.builder = null; state.openReport = null; renderStaff(); } }, label))),
-    main));
+  fill(app, h('div', { class: 'wrap wide' }, header(`${me.name} (${ROLE_LABEL[me.role]})`), bdayBox, main), sheet, nav);
   staffBirthdays(bdayBox);
   if (canMark() && !state.openKid) api('GET', '/api/staff/pending').then((q) => { if (q.pending.length) bdayBox.prepend(pendingCard(q.pending, () => renderStaff())); }).catch(() => {});
   if (me.role === 'admin' && !state.openKid) api('GET', '/api/admin/reset-requests').then((q) => { if (q.requests.length) bdayBox.prepend(h('button', { class: 'notice', type: 'button', style: 'text-align:start;cursor:pointer', onclick: () => { state.tab = 'team'; renderStaff(); } }, `فيه ${q.requests.length} طلب نسيان كلمة سر. اضغط هنا لتشوفه.`)); }).catch(() => {});
@@ -450,7 +460,7 @@ async function staffOverview(main) {
   const tbody = h('tbody');
   const draw = () => {
     const q = search.value.trim();
-    const rows = r.kids.filter((k) => !q || k.name.includes(q) || k.phone.includes(q));
+    const rows = r.kids.filter((k) => !q || k.name.includes(q) || (k.phone || '').includes(q));
     fill(tbody, ...rows.map((k) => h('tr', { class: 'click', tabindex: 0, onclick: () => { state.openKid = k.id; renderStaff(); }, onkeydown: (e) => { if (e.key === 'Enter') { state.openKid = k.id; renderStaff(); } } },
       h('td', null, h('div', { class: 'row', style: 'flex-wrap:nowrap' }, avatar(k.id, k.photo, 36),
         h('div', null, h('b', null, k.name), !k.complete && h('div', null, h('span', { class: 'pill bad' }, 'بياناته ناقصة'))))),
@@ -485,6 +495,7 @@ async function staffOverview(main) {
   draw();
 }
 
+const hiddenNum = () => h('span', { class: 'muted' }, 'مخفي (للمسؤول فقط)');
 async function staffKid(main, id) {
   fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
   const r = await act(() => api('GET', `/api/staff/kid/${id}`));
@@ -505,9 +516,9 @@ async function staffKid(main, id) {
     h('div', { class: 'card stack' },
       h('div', { class: 'row between' }, h('div', { class: 'row', style: 'flex-wrap:nowrap' }, avatar(p.id, p.photo, 64), h('h2', null, p.name)), h('span', { class: 'pill star num', style: 'font-size:1rem' }, String(s.total), starIc())),
       h('dl', { class: 'kv' },
-        h('dt', null, 'موبايل الولد'), h('dd', null, tel(p.phone)),
-        h('dt', null, 'موبايل ماما'), h('dd', null, p.mother_phone ? tel(p.mother_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
-        h('dt', null, 'موبايل بابا'), h('dd', null, p.father_phone ? tel(p.father_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
+        h('dt', null, 'موبايل الولد'), h('dd', null, p.phones_hidden ? hiddenNum() : tel(p.phone)),
+        h('dt', null, 'موبايل ماما'), h('dd', null, p.phones_hidden ? hiddenNum() : p.mother_phone ? tel(p.mother_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
+        h('dt', null, 'موبايل بابا'), h('dd', null, p.phones_hidden ? hiddenNum() : p.father_phone ? tel(p.father_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
         h('dt', null, 'العنوان'), h('dd', null, p.address || '-'),
         h('dt', null, 'أب الاعتراف'), h('dd', null, p.confessor || '-'),
         h('dt', null, 'المدرسة'), h('dd', null, p.school || '-'),
@@ -879,7 +890,7 @@ function pendingCard(list, onChange) {
   return h('div', { class: 'card stack', style: 'border-color:var(--star)' }, h('h3', null, `حسابات جديدة مستنية موافقتك (${list.length})`),
     h('p', { class: 'muted small' }, 'اتأكد إنه ولد من الفصل قبل ما توافق. اللي مش معروف ارفضه وهيتمسح.'),
     list.map((p) => h('div', { class: 'row between' },
-      h('div', null, h('b', null, p.name), h('div', { class: 'muted small num' }, `${p.phone} - ${p.created_at.slice(0, 16)}`)),
+      h('div', null, h('b', null, p.name), h('div', { class: 'muted small num' }, `${p.phone ? p.phone + ' - ' : ''}${p.created_at.slice(0, 16)}`)),
       h('div', { class: 'row' },
         h('button', { class: 'btn sm', type: 'button', onclick: async () => { const x = await act(() => api('POST', `/api/staff/pending/${p.id}/approve`), 'تم قبول الحساب'); if (x) onChange(); } }, 'قبول'),
         sureButton('رفض', 'تأكيد الرفض', async () => { const x = await act(() => api('POST', `/api/staff/pending/${p.id}/reject`), 'تم رفض الحساب'); if (x) onChange(); })))));
@@ -1043,6 +1054,7 @@ async function reportView(main, id) {
   fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
   const r = await act(() => api('GET', `/api/staff/report/${id}?month=${reportMonth}`));
   if (!r) { state.openReport = null; return renderStaff(); }
+  const isAdmin = state.me.user.role === 'admin';
   let showNotes = false;
   const area = h('div', { class: 'card stack report' });
   const actions = h('div', { class: 'card stack noprint' });
@@ -1058,9 +1070,9 @@ async function reportView(main, id) {
         q.submitted ? h('span', { class: 'pill good num' }, `${q.score} من ${q.max}${q.pending ? ' (في انتظار التصحيح)' : ''}`) : h('span', { class: 'pill bad' }, 'لم يشارك')))) : null,
       showNotes && r.notes.length ? h('div', null, h('h3', null, 'ملاحظات'), r.notes.map((n) => h('div', null, `${n.day}: ${n.text}${n.delta ? ` (${n.delta > 0 ? '+' : ''}${n.delta} نجمة)` : ''}`))) : null);
     const text = reportText(r, showNotes);
-    const wa = (label, phone) => phone ? h('a', { class: 'btn', href: waLink(phone, text), target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, label) : h('button', { class: 'btn ghost', type: 'button', disabled: true }, label + ' (مفيش رقم)');
-    fill(actions, h('label', { class: 'attrow' }, h('input', { type: 'checkbox', checked: showNotes, onchange: (e) => { showNotes = e.target.checked; draw(); } }), h('span', null, 'إظهار الملاحظات في التقرير')),
-      h('div', { class: 'row' }, wa('واتساب لماما', r.kid.mother_phone), wa('واتساب لبابا', r.kid.father_phone)),
+    const wa = (label, phone) => !isAdmin ? null : phone ? h('a', { class: 'btn', href: waLink(phone, text), target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, label) : h('button', { class: 'btn ghost', type: 'button', disabled: true }, label + ' (مفيش رقم)');
+    fill(actions, !isAdmin && h('p', { class: 'muted small' }, 'إرسال التقرير للأهل (واتساب) متاح للمسؤول فقط. تقدر تنسخ النص أو تطبعه.'), h('label', { class: 'attrow' }, h('input', { type: 'checkbox', checked: showNotes, onchange: (e) => { showNotes = e.target.checked; draw(); } }), h('span', null, 'إظهار الملاحظات في التقرير')),
+      isAdmin && h('div', { class: 'row' }, wa('واتساب لماما', r.kid.mother_phone), wa('واتساب لبابا', r.kid.father_phone)),
       h('div', { class: 'row' },
         h('button', { class: 'btn ghost', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('تم نسخ التقرير'); } catch { toast('معرفناش ننسخ', true); } } }, 'نسخ النص'),
         h('button', { class: 'btn ghost', type: 'button', onclick: () => window.print() }, 'طباعة / حفظ PDF')));

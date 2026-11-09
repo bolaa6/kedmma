@@ -495,7 +495,6 @@ async function staffOverview(main) {
   draw();
 }
 
-const hiddenNum = () => h('span', { class: 'muted' }, 'مخفي (للمسؤول فقط)');
 async function staffKid(main, id) {
   fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
   const r = await act(() => api('GET', `/api/staff/kid/${id}`));
@@ -516,9 +515,9 @@ async function staffKid(main, id) {
     h('div', { class: 'card stack' },
       h('div', { class: 'row between' }, h('div', { class: 'row', style: 'flex-wrap:nowrap' }, avatar(p.id, p.photo, 64), h('h2', null, p.name)), h('span', { class: 'pill star num', style: 'font-size:1rem' }, String(s.total), starIc())),
       h('dl', { class: 'kv' },
-        h('dt', null, 'موبايل الولد'), h('dd', null, p.phones_hidden ? hiddenNum() : tel(p.phone)),
-        h('dt', null, 'موبايل ماما'), h('dd', null, p.phones_hidden ? hiddenNum() : p.mother_phone ? tel(p.mother_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
-        h('dt', null, 'موبايل بابا'), h('dd', null, p.phones_hidden ? hiddenNum() : p.father_phone ? tel(p.father_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
+        h('dt', null, 'موبايل الولد'), h('dd', null, tel(p.phone)),
+        h('dt', null, 'موبايل ماما'), h('dd', null, p.mother_phone ? tel(p.mother_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
+        h('dt', null, 'موبايل بابا'), h('dd', null, p.father_phone ? tel(p.father_phone) : h('span', { class: 'muted' }, 'لسه ما اتكتبش')),
         h('dt', null, 'العنوان'), h('dd', null, p.address || '-'),
         h('dt', null, 'أب الاعتراف'), h('dd', null, p.confessor || '-'),
         h('dt', null, 'المدرسة'), h('dd', null, p.school || '-'),
@@ -1070,9 +1069,9 @@ async function reportView(main, id) {
         q.submitted ? h('span', { class: 'pill good num' }, `${q.score} من ${q.max}${q.pending ? ' (في انتظار التصحيح)' : ''}`) : h('span', { class: 'pill bad' }, 'لم يشارك')))) : null,
       showNotes && r.notes.length ? h('div', null, h('h3', null, 'ملاحظات'), r.notes.map((n) => h('div', null, `${n.day}: ${n.text}${n.delta ? ` (${n.delta > 0 ? '+' : ''}${n.delta} نجمة)` : ''}`))) : null);
     const text = reportText(r, showNotes);
-    const wa = (label, phone) => !isAdmin ? null : phone ? h('a', { class: 'btn', href: waLink(phone, text), target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, label) : h('button', { class: 'btn ghost', type: 'button', disabled: true }, label + ' (مفيش رقم)');
-    fill(actions, !isAdmin && h('p', { class: 'muted small' }, 'إرسال التقرير للأهل (واتساب) متاح للمسؤول فقط. تقدر تنسخ النص أو تطبعه.'), h('label', { class: 'attrow' }, h('input', { type: 'checkbox', checked: showNotes, onchange: (e) => { showNotes = e.target.checked; draw(); } }), h('span', null, 'إظهار الملاحظات في التقرير')),
-      isAdmin && h('div', { class: 'row' }, wa('واتساب لماما', r.kid.mother_phone), wa('واتساب لبابا', r.kid.father_phone)),
+    const wa = (label, phone) => phone ? h('a', { class: 'btn', href: waLink(phone, text), target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, label) : h('button', { class: 'btn ghost', type: 'button', disabled: true }, label + ' (مفيش رقم)');
+    fill(actions, h('label', { class: 'attrow' }, h('input', { type: 'checkbox', checked: showNotes, onchange: (e) => { showNotes = e.target.checked; draw(); } }), h('span', null, 'إظهار الملاحظات في التقرير')),
+      h('div', { class: 'row' }, wa('واتساب لماما', r.kid.mother_phone), wa('واتساب لبابا', r.kid.father_phone)),
       h('div', { class: 'row' },
         h('button', { class: 'btn ghost', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(text); toast('تم نسخ التقرير'); } catch { toast('معرفناش ننسخ', true); } } }, 'نسخ النص'),
         h('button', { class: 'btn ghost', type: 'button', onclick: () => window.print() }, 'طباعة / حفظ PDF')));

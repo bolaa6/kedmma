@@ -114,7 +114,15 @@ const monthLabel = (m) => { const [y, mo] = m.split('-'); return `${MONTH_NAMES[
 const weekLabel = (a, b) => `${shortDate(a)} إلى ${shortDate(b)}`;
 
 // ---------- الحالة والثيم ----------
-const state = { me: null, tab: null, kidWeek: null, openKid: null };
+const state = { me: null, tab: null, kidWeek: null, openKid: null, news: { photos: 0, videos: 0, links: 0 } };
+// نقطة "جديد" على المكتبة
+function paintNews() {
+  const n = state.news, total = (n.photos || 0) + (n.videos || 0) + (n.links || 0);
+  document.querySelectorAll('[data-tab="library"]').forEach((b) => { if (total) b.setAttribute('data-new', '1'); else b.removeAttribute('data-new'); });
+  document.querySelectorAll('[data-sec]').forEach((b) => { const c = n[b.dataset.sec] || 0; if (c) b.setAttribute('data-new', String(c)); else b.removeAttribute('data-new'); });
+}
+async function refreshNews() { try { state.news = await api('GET', '/api/new'); } catch { return; } paintNews(); }
+async function markSeen(sec) { if (!state.news[sec]) return; state.news[sec] = 0; paintNews(); try { await api('POST', '/api/new/seen', { sec }); } catch {} }
 function applyTheme(t) {
   if (t) document.documentElement.setAttribute('data-theme', t);
   else document.documentElement.removeAttribute('data-theme');
@@ -224,11 +232,12 @@ function renderKid() {
   const tabs = [['week', 'أسبوعي', 'week'], ['quiz', 'المسابقة', 'trophy'], ['library', 'المكتبة', 'book'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
   if (me.game_enabled) tabs.splice(2, 0, ['game', 'اللعبة', 'trophy']);
   const bar = h('nav', { class: 'tabbar', 'aria-label': 'التنقل' }, tabs.map(([id, label, ic]) =>
-    h('button', { type: 'button', 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.openContest = null; renderKid(); } }, icon(ic), label)));
+    h('button', { type: 'button', 'data-tab': id, 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.openContest = null; renderKid(); } }, icon(ic), label)));
   const bd = me.birthday;
   const greet = bd && bd.is_today ? h('div', { class: 'bday-card' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic'); return c; })(),
     h('div', null, h('b', null, `كل سنة وإنت طيب يا ${firstName(me.user.name)}`), h('p', null, `النهارده عيد ميلادك، ودلوقتي عندك ${arYears(bd.turning)}. ربنا يفرّح قلبك ويبارك حياتك.`))) : null;
   fill(app, h('div', { class: 'wrap' }, header(me.user.name), greet), main, bar);
+  refreshNews();
   if (state.tab === 'week') kidWeek(main);
   else if (state.tab === 'quiz') kidQuiz(main);
   else if (state.tab === 'game') kidGame(main);
@@ -429,12 +438,13 @@ function renderStaff() {
   const moreBtn = h('button', { type: 'button', class: 'more', 'aria-expanded': 'false', 'aria-current': !state.openKid && secActive ? 'page' : null,
     onclick: (e) => { e.stopPropagation(); const open = sheet.hidden; sheet.hidden = !open; moreBtn.setAttribute('aria-expanded', String(open)); } }, icon('more'), 'المزيد');
   const nav = h('nav', { class: 'snav', 'aria-label': 'التنقل' },
-    tabs.map(([id, label, ic, p]) => h('button', { type: 'button', class: p ? '' : 'sec', 'aria-current': !state.openKid && state.tab === id ? 'page' : null, onclick: () => go(id) }, icon(ic), label)), moreBtn);
+    tabs.map(([id, label, ic, p]) => h('button', { type: 'button', 'data-tab': id, class: p ? '' : 'sec', 'aria-current': !state.openKid && state.tab === id ? 'page' : null, onclick: () => go(id) }, icon(ic), label)), moreBtn);
   document.addEventListener('click', () => { sheet.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); }, { once: true });
   const main = h('main', { class: 'stack' });
   const bdayBox = h('div', { class: 'stack' });
   fill(app, h('div', { class: 'wrap wide' }, header(`${me.name} (${ROLE_LABEL[me.role]})`), bdayBox, main), sheet, nav);
   staffBirthdays(bdayBox);
+  refreshNews();
   if (canMark() && !state.openKid) api('GET', '/api/staff/pending').then((q) => { if (q.pending.length) bdayBox.prepend(pendingCard(q.pending, () => renderStaff())); }).catch(() => {});
   if (me.role === 'admin' && !state.openKid) api('GET', '/api/admin/reset-requests').then((q) => { if (q.requests.length) bdayBox.prepend(h('button', { class: 'notice', type: 'button', style: 'text-align:start;cursor:pointer', onclick: () => { state.tab = 'team'; renderStaff(); } }, `فيه ${q.requests.length} طلب نسيان كلمة سر. اضغط هنا لتشوفه.`)); }).catch(() => {});
   if (state.openKid) staffKid(main, state.openKid);
@@ -1364,9 +1374,10 @@ async function gameAdminCard() {
 let mediaTab = 'photos';
 function mediaView(main, canAdd) {
   const body = h('div', { class: 'stack' });
-  const seg = (id, label) => h('button', { type: 'button', 'aria-pressed': String(mediaTab === id), onclick: () => { mediaTab = id; mediaView(main, canAdd); } }, label);
+  const seg = (id, label) => h('button', { type: 'button', 'data-sec': id, 'aria-pressed': String(mediaTab === id), onclick: () => { mediaTab = id; mediaView(main, canAdd); } }, label);
   fill(main, h('h2', null, 'المكتبة'),
     h('div', { class: 'seg', style: 'grid-template-columns:repeat(3,1fr)', role: 'group', 'aria-label': 'القسم' }, seg('photos', 'الصور'), seg('videos', 'الفيديوهات'), seg('links', 'الروابط')), body);
+  markSeen(mediaTab); paintNews();
   if (mediaTab === 'photos') galleryView(body, canAdd);
   else libraryView(body, canAdd, mediaTab === 'videos' ? 'video' : 'link');
 }

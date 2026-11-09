@@ -247,14 +247,14 @@ async function kidWeek(main) {
   const stars = { v: r.stars };
   const starNum = h('b', { class: 'num' }, String(stars.v.total));
   const isCurrent = week.start <= today && today <= week.end;
-  const prevOk = addDays(week.start, -1) >= addDays(min_day, -6);
+  const prevOk = week.start > addDays(today, -90);
   const draw = () => {
     const days = [];
     for (let i = 0; i < 7; i++) days.push(addDays(week.start, i));
     const mkChip = (label, on, disabled, onclick) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(on), disabled, onclick }, icon('check'), label);
     const dayRows = days.map((d) => {
       const rec = week.days[d] || { prayed: false, gospel: false };
-      const locked = d > today || d < min_day;
+      const locked = d !== today;
       const toggle = (field) => async () => {
         const nextVal = !rec[field];
         const res = await act(() => api('PUT', '/api/day', { day: d, [field]: nextVal }));
@@ -268,14 +268,14 @@ async function kidWeek(main) {
         mkChip('صليت', rec.prayed, locked, toggle('prayed')),
         mkChip('قريت الإنجيل', rec.gospel, locked, toggle('gospel')));
     });
-    const massLocked = week.start > today || week.end < min_day;
+    const massLocked = !(week.start <= today && today <= week.end);
     const massBtn = mkChip(week.mass ? 'رحت القداس' : 'رحت القداس الأسبوع ده', week.mass, massLocked, async () => {
       const res = await act(() => api('PUT', '/api/mass', { week_start: week.start, attended: !week.mass }));
       if (!res) return;
       week.mass = !week.mass; stars.v = res.stars; starNum.textContent = String(res.stars.total); draw();
     });
     massBtn.classList.add('wide');
-    const confLocked = false;
+    const confLocked = week.confession_month !== today.slice(0, 7);
     const confBtn = mkChip(week.confession ? 'اعترفت الشهر ده' : 'اعترفت الشهر ده', week.confession, confLocked, async () => {
       const res = await act(() => api('PUT', '/api/confession', { month: week.confession_month, confession: !week.confession }));
       if (!res) return;

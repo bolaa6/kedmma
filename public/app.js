@@ -39,6 +39,7 @@ function icon(name) {
     podium: 'M9 9h6v11H9zM2 13h6v7H2zm14 4h6v3h-6zM12 2l1.2 2.5 2.8.4-2 2 .5 2.8L12 8.3 9.5 9.7 10 6.9l-2-2 2.8-.4z',
     tune: 'M3 6h9v2H3zm13 0h5v2h-5zM12 4h2v6h-2zM3 11h5v2H3zm9 0h9v2h-9zM8 9h2v6H8zM3 16h11v2H3zm15 0h3v2h-3zM14 14h2v6h-2z',
     more: 'M5 10.2a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6zm7 0a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6zm7 0a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6z',
+    lesson: 'M6 2h9l5 5v15H6zm8 1.5V8h4.5zM8.5 12h8v1.6h-8zm0 3.4h8V17h-8zM8.5 8.6h4V10h-4z',
     moon: 'M20.5 14.5A8.5 8.5 0 019.5 3.5 8.5 8.5 0 1020.5 14.5z',
     sun: 'M12 7a5 5 0 100 10 5 5 0 000-10zM11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1l1.4-1.4 2.1 2.1-1.4 1.4zM5.6 19.8l-1.4-1.4 2.1-2.1 1.4 1.4zM17.7 7.7l-1.4-1.4 2.1-2.1 1.4 1.4z',
   };
@@ -230,9 +231,9 @@ function renderKid() {
   const me = state.me;
   if (!state.tab) state.tab = me.profile.complete ? 'week' : 'profile';
   const main = h('main', { class: 'wrap stack' });
-  const tabs = [['week', 'أسبوعي', 'week'], ['quiz', 'المسابقة', 'trophy'], ['library', 'المكتبة', 'book'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
-  if (me.game_enabled) tabs.splice(2, 0, ['game', 'اللعبة', 'trophy']);
-  const bar = h('nav', { class: 'tabbar', 'aria-label': 'التنقل' }, tabs.map(([id, label, ic]) =>
+  const tabs = [['week', 'أسبوعي', 'week'], ['lessons', 'الدروس', 'lesson'], ['quiz', 'المسابقة', 'trophy'], ['library', 'المكتبة', 'book'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
+  if (me.game_enabled) tabs.splice(3, 0, ['game', 'اللعبة', 'trophy']);
+  const bar = h('nav', { class: 'tabbar' + (tabs.length > 6 ? ' many' : ''), 'aria-label': 'التنقل' }, tabs.map(([id, label, ic]) =>
     h('button', { type: 'button', 'data-tab': id, 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.openContest = null; state.lessonView = null; renderKid(); } }, icon(ic), label)));
   const bd = me.birthday;
   const greet = bd && bd.is_today ? h('div', { class: 'bday-card' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic'); return c; })(),
@@ -241,6 +242,7 @@ function renderKid() {
   refreshNews();
   if (state.lessonView) { if (state.lessonView.list) kidLessons(main); else kidLesson(main, state.lessonView.id); }
   else if (state.tab === 'week') kidWeek(main);
+  else if (state.tab === 'lessons') kidLessons(main);
   else if (state.tab === 'quiz') kidQuiz(main);
   else if (state.tab === 'game') kidGame(main);
   else if (state.tab === 'library') mediaView(main, false);
@@ -413,8 +415,8 @@ async function kidLessons(main) {
   const r = await act(() => api('GET', '/api/lessons'));
   if (!r) return;
   fill(main,
-    h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.lessonView = null; renderKid(); } }, 'رجوع'),
-    h('h2', null, 'كل الدروس'),
+    state.lessonView && state.lessonView.list && h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.lessonView = null; renderKid(); } }, 'رجوع'),
+    h('h2', null, 'الدروس'),
     r.lessons.length ? h('div', { class: 'stack' }, r.lessons.map((l) => h('button', { class: 'card lesson-row', type: 'button', onclick: () => { state.lessonView = { id: l.id }; renderKid(); } },
       h('div', { class: 'grow' }, h('b', null, l.title), h('div', { class: 'muted small' }, shortDate(l.created_at.slice(0, 10)))),
       l.read ? h('span', { class: 'pill good' }, 'قريته') : h('span', { class: 'pill' }, 'جديد')))) : h('p', { class: 'muted' }, 'لسه مفيش دروس'));

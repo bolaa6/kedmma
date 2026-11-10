@@ -342,3 +342,6 @@ body.staff { padding-block-end: calc(84px + env(safe-area-inset-bottom)); }
 .lesson-row { display: flex; align-items: center; gap: 10px; text-align: start; width: 100%; cursor: pointer; }
 textarea.short { min-height: 70px; }
 textarea.tall { min-height: 220px; }
+
+.tabbar.many button { font-size: .68rem; padding: 6px 1px; }
+.tabbar.many button svg { width: 22px; height: 22px; }

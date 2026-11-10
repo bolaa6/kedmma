@@ -324,3 +324,8 @@ body.staff { padding-block-end: calc(84px + env(safe-area-inset-bottom)); }
 .bi-lg { font-size: 1.8rem; line-height: 1; }
 .card.off { opacity: .6; }
 .badge .btn { margin-top: 4px; }
+
+.char-card { display: flex; align-items: center; gap: 14px; background: linear-gradient(135deg, var(--primary-soft), var(--surface)); }
+.char-art { flex: none; }
+.char-art svg { display: block; width: 124px; height: 132px; }
+.char-card .btn[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-soft); }

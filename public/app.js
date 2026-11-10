@@ -270,9 +270,17 @@ async function kidWeek(main) {
     const card = cheerCard(r.cheers, async () => { await api('POST', '/api/cheers/seen', {}).catch(() => {}); cheerSlot.replaceChildren(); toast('ربنا يباركك'); });
     cheerSlot.replaceChildren(...(card ? [card] : []));
   };
+  // الشخصية واللقب: بتظهر للولد نفسه بس
+  const loadCharacter = async () => {
+    const c = await api('GET', '/api/my-character').catch(() => null);
+    if (!c) return null;
+    charSlot.replaceChildren(characterCard(c, async (g) => { if (await act(() => api('POST', '/api/my-character', { gender: g }))) loadCharacter(); }));
+    return c;
+  };
   const afterAction = async (kind) => {
     const fn = firstName(state.me.user.name);
-    const s = await loadStreak();
+    const [s, ch] = await Promise.all([loadStreak(), loadCharacter()]);
+    if (ch && ch.promoted) { celebrate(`لقب جديد يا ${fn}!`, `بقيت «${ch.stage_name}»`); return; }
     const rec = week.days[today] || {};
     const both = !!(rec.prayed && rec.gospel);
     let sub = kind === 'prayer' ? 'ربنا يسمع صلاتك' : 'كلمة ربنا في قلبك';
@@ -366,11 +374,11 @@ async function kidWeek(main) {
       week.attendance.length > 0 && h('p', { class: 'muted small' }, `حضرت الاجتماع ${week.attendance.length} ${week.attendance.length > 2 ? 'مرات' : 'مرة'} الأسبوع ده، وخدت نجمة على كل مرة.`));
   };
   const box = h('div', { class: 'stack' });
-  const contentSlot = h('div'), streakSlot = h('div'), cheerSlot = h('div');
+  const contentSlot = h('div'), streakSlot = h('div'), cheerSlot = h('div'), charSlot = h('div');
   fill(main, 
     h('div', { class: 'stars-hero' }, (() => { const s = icon('star'); s.setAttribute('class', 'big'); return s; })(),
       h('div', null, starNum, h('span', { class: 'muted' }, 'مجموع نجومك'))),
-    streakSlot, cheerSlot, contentSlot,
+    charSlot, streakSlot, cheerSlot, contentSlot,
     (() => { const b = state.me.birthday; if (!b || b.is_today) return null;
       return h('div', { class: 'card row bday-row' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic sm'); return c; })(),
         h('div', { class: 'grow' }, h('b', null, 'عمرك ' + ageText(b)), h('div', { class: 'muted small' }, `فاضل ${arDays(b.days_until)} على عيد ميلادك`))); })(),
@@ -382,9 +390,54 @@ async function kidWeek(main) {
     h('p', { class: 'muted small' }, 'علّم على صلاتك. وقراءة الإنجيل بتتسجل بعد ما تكتب اللي فهمته منها. تقدر تعدّل آخر أسبوعين بس.'));
   draw();
   loadStreak(); loadCheers();
+  loadCharacter().then((c) => { if (c && c.promoted) celebrate(`لقب جديد يا ${firstName(state.me.user.name)}!`, `بقيت «${c.stage_name}»`); });
   api('GET', '/api/daily-content').then((c) => { if (c.item) contentSlot.replaceChildren(contentCard(c.item)); }).catch(() => {});
 }
 
+// رسم الشخصية: بتكبر وبيزيد عليها حاجات مع كل لقب (0 مبتدئ، 1 مجتهد، 2 بطل، 3 قدوة)
+function characterSvg(stage, gender) {
+  const girl = gender === 'girl', shirt = girl ? '#D4537E' : '#378ADD', hair = '#3B2A20', skin = '#E8B88A';
+  const scale = [0.9, 1, 1.08, 1.15][stage] || 1;
+  const hand = (x, y) => `<circle cx="${x}" cy="${y + 2}" r="4.5" fill="${skin}"/>`;
+  const arm = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${shirt}" stroke-width="8" stroke-linecap="round"/>` + hand(x2, y2);
+  let back = '', arms = '', extra = '', top = '';
+  if (stage === 3) {
+    const rays = [[50, -62, 60, -62], [43, -37, 52, -32], [-43, -37, -52, -32], [-50, -62, -60, -62], [-43, -87, -52, -92], [-25, -105, -30, -114], [0, -112, 0, -122], [25, -105, 30, -114], [43, -87, 52, -92]]
+      .map(([a, b, c, d]) => `<line x1="${a}" y1="${b}" x2="${c}" y2="${d}"/>`).join('');
+    back += `<g stroke="#EF9F27" stroke-width="3" stroke-linecap="round">${rays}</g><circle cx="0" cy="-62" r="46" fill="#FAEEDA"/>` +
+      '<path d="M-18 -54 L18 -54 L38 -4 Q0 8 -38 -4 Z" fill="#EF9F27" stroke="#854F0B" stroke-width="1.5"/>';
+    top = '<path d="M-14 -92 L-14 -106 L-7 -99 L0 -109 L7 -99 L14 -106 L14 -92 Z" fill="#EF9F27" stroke="#854F0B" stroke-width="1"/><circle cx="-14" cy="-107" r="2.2" fill="#FAEEDA"/><circle cx="0" cy="-110" r="2.2" fill="#FAEEDA"/><circle cx="14" cy="-107" r="2.2" fill="#FAEEDA"/>';
+  } else if (stage === 2) back += '<path d="M-18 -54 L18 -54 L38 -4 Q0 8 -38 -4 Z" fill="#E24B4A"/>';
+  else if (stage === 1) back += '<rect x="-27" y="-54" width="54" height="38" rx="9" fill="#BA7517"/>';
+  if (stage === 0) arms = arm(-20, -48, -28, -28) + arm(20, -48, 28, -28);
+  else if (stage === 1) {
+    arms = '<line x1="-10" y1="-54" x2="-10" y2="-28" stroke="#854F0B" stroke-width="3"/><line x1="10" y1="-54" x2="10" y2="-28" stroke="#854F0B" stroke-width="3"/>' + arm(-20, -48, -28, -28) +
+      `<line x1="20" y1="-48" x2="28" y2="-34" stroke="${shirt}" stroke-width="8" stroke-linecap="round"/>` +
+      '<rect x="22" y="-52" width="17" height="21" rx="2" fill="#D85A30"/><line x1="25" y1="-47" x2="36" y2="-47" stroke="#FAECE7" stroke-width="1.5"/><line x1="25" y1="-42" x2="36" y2="-42" stroke="#FAECE7" stroke-width="1.5"/>' + hand(28, -34);
+  } else if (stage === 2) arms = arm(-20, -48, -30, -32) + arm(20, -48, 30, -32);
+  else arms = arm(-20, -48, -30, -60) + arm(20, -48, 30, -60);
+  if (stage >= 2) extra = '<path d="M-4 -55 L-1 -44 M4 -55 L1 -44" fill="none" stroke="#E24B4A" stroke-width="3"/><circle cx="0" cy="-38" r="6.5" fill="#EF9F27" stroke="#854F0B" stroke-width="1"/>';
+  const backHair = girl ? `<path d="M-21 -78 Q-23 -101 0 -101 Q23 -101 21 -78 L25 -50 Q13 -46 9 -56 L-9 -56 Q-13 -46 -25 -50 Z" fill="${hair}"/>` : '';
+  const bow = girl ? '<circle cx="-18" cy="-91" r="3.6" fill="#D4537E"/><circle cx="-10" cy="-93" r="3.6" fill="#D4537E"/><circle cx="-14" cy="-92" r="2" fill="#FBEAF0"/>' : '';
+  const mouth = stage >= 2 ? 'M-6 -66 Q0 -59 6 -66' : 'M-6 -67 Q0 -62 6 -67';
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 170" role="img" aria-label="شخصيتك"><g transform="translate(80 152) scale(${scale})">${back}` +
+    '<rect x="-14" y="-18" width="11" height="18" rx="3" fill="#5F5E5A"/><rect x="3" y="-18" width="11" height="18" rx="3" fill="#5F5E5A"/><ellipse cx="-9" cy="1" rx="8" ry="4" fill="#2C2C2A"/><ellipse cx="9" cy="1" rx="8" ry="4" fill="#2C2C2A"/>' +
+    `<rect x="-20" y="-56" width="40" height="42" rx="9" fill="${shirt}"/>${arms}${extra}${backHair}<circle cx="0" cy="-76" r="19" fill="${skin}"/>` +
+    `<path d="M-19 -78 Q-19 -98 0 -98 Q19 -98 19 -78 Q8 -88 -19 -78 Z" fill="${hair}"/>${bow}${top}` +
+    `<circle cx="-7" cy="-75" r="2" fill="#2C2C2A"/><circle cx="7" cy="-75" r="2" fill="#2C2C2A"/><path d="${mouth}" fill="none" stroke="#7A3E1D" stroke-width="1.8" stroke-linecap="round"/></g></svg>`;
+}
+// كارت الشخصية واللقب: بيظهر للولد نفسه بس
+function characterCard(c, setGender) {
+  const art = h('div', { class: 'char-art' });
+  art.append(document.importNode(new DOMParser().parseFromString(characterSvg(c.stage, c.gender), 'image/svg+xml').documentElement, true));
+  const gbtn = (g, label) => h('button', { class: 'btn ghost sm', type: 'button', 'aria-pressed': String(c.gender === g), onclick: () => { if (c.gender !== g) setGender(g); } }, label);
+  return h('div', { class: 'card char-card' }, art,
+    h('div', { class: 'grow stack' },
+      h('div', { class: 'row between' }, h('h2', { style: 'margin:0' }, c.stage_name), h('span', { class: 'pill star num' }, `المستوى ${c.level}`)),
+      h('div', { class: 'progress', role: 'progressbar', 'aria-valuenow': String(c.pct), 'aria-valuemin': '0', 'aria-valuemax': '100' }, h('i', { style: `width:${c.pct}%` })),
+      h('p', { class: 'muted small', style: 'margin:0' }, c.next_name ? `باقي ${c.to_next} نجمة وتبقى «${c.next_name}»` : 'وصلت لأعلى لقب. كمّل يا بطل!'),
+      h('div', { class: 'row' }, gbtn('boy', 'ولد'), gbtn('girl', 'بنت'))));
+}
 // احتفال لما الولد يخلّص حاجة: نجمة بتلمع + ورق ملوّن (بيتقفل لوحده)
 function celebrate(title, sub) {
   const old = document.getElementById('celebrate'); if (old) old.remove();
@@ -799,7 +852,8 @@ async function staffTeam(main) {
   const gameCard = await gameAdminCard();
   const lvCard = await levelCard();
   const contentCardAdmin = await contentAdminCard();
-  fill(main, reqCard, gameCard, lvCard, contentCardAdmin,
+  const stagesCardEl = await stagesCard();
+  fill(main, reqCard, gameCard, lvCard, stagesCardEl, contentCardAdmin,
     h('div', { class: 'card stack' }, h('h3', null, 'الخدام والمتابعين'),
       h('div', { class: 'list' }, r.staff.map((u) => h('div', { class: 'row between' },
         h('div', null, h('b', null, u.name), h('div', { class: 'muted small ltr', style: 'text-align:start' }, u.phone)),
@@ -1575,6 +1629,22 @@ async function staffBadges(main) {
     h('p', { class: 'muted small' }, 'التلقائية بتتمنح للولد لوحدها أول ما يحقق الشرط. اليدوية بيمنحها الخادم من صفحة الولد. لو أوقفت إشارة، الأولاد اللي خدوها بيحتفظوا بيها.'),
     edit && addCard(),
     h('div', { class: 'stack' }, r.badges.map(item)));
+}
+
+// ألقاب الشخصية: اللقب بيظهر للولد نفسه بس
+async function stagesCard() {
+  const r = await act(() => api('GET', '/api/admin/stages'));
+  if (!r) return null;
+  const rows = r.stages.map((st, i) => {
+    const name = h('input', { maxlength: 20, 'aria-label': `اسم اللقب ${i + 1}` }); name.value = st.name;
+    const from = h('input', { type: 'number', min: 1, max: 99, class: 'ltr', style: 'width:5rem', 'aria-label': `يبدأ من المستوى (${i + 1})` }); from.value = String(st.from);
+    if (i === 0) from.disabled = true;
+    return { name, from, row: h('div', { class: 'row' }, h('span', { class: 'muted small', style: 'min-width:4.5rem' }, `اللقب ${i + 1}`), h('div', { class: 'grow' }, name), h('span', { class: 'muted small' }, 'من مستوى'), from) };
+  });
+  return h('div', { class: 'card stack' }, h('h3', null, 'ألقاب الشخصية'),
+    h('p', { class: 'muted small' }, 'كل ولد بيشوف شخصيته ولقبه هو بس، ومحدش بيشوف لقب التاني. الشخصية بتكبر لما يوصل لمستوى اللقب اللي بعده (المستوى بيزيد كل كام نجمة من الإعداد اللي فوق).'),
+    rows.map((x) => x.row),
+    h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => act(() => api('POST', '/api/admin/stages', { stages: rows.map((x) => ({ name: x.name.value, from: Number(x.from.value) })) }), 'تم الحفظ') }, 'حفظ'));
 }
 
 async function contentAdminCard() {

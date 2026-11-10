@@ -298,3 +298,25 @@ body.staff { padding-block-end: calc(84px + env(safe-area-inset-bottom)); }
 .badge .bi { font-size: 1.9rem; line-height: 1.2; }
 .badge b { font-size: .9rem; }
 .read-note { background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }
+
+/* ===== احتفال + عدّاد المواظبة + تشجيع ===== */
+#celebrate { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; background: rgba(15, 26, 38, .35); animation: cel-fade .25s ease; overflow: hidden; }
+#celebrate .cel { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 22px 28px; text-align: center; box-shadow: var(--shadow); max-width: min(86vw, 360px); animation: cel-pop .55s cubic-bezier(.2, 1.4, .4, 1); }
+#celebrate .cel h2 { margin: 6px 0 4px; font-family: var(--display); }
+#celebrate .cel p { margin: 0; color: var(--ink-2); }
+.cel-star { width: 88px; height: 88px; color: var(--star); animation: cel-spin .9s ease; }
+.confetti { position: fixed; top: -16px; left: var(--x); width: 9px; height: 14px; background: var(--c); border-radius: 2px; animation: cel-fall var(--t) linear var(--d) forwards; }
+@keyframes cel-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cel-pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes cel-spin { from { transform: rotate(-200deg) scale(.4); } to { transform: rotate(0) scale(1); } }
+@keyframes cel-fall { to { transform: translateY(110vh) rotate(540deg); } }
+@media (prefers-reduced-motion: reduce) { #celebrate, #celebrate .cel, .cel-star { animation: none; } }
+.streak-card { display: flex; align-items: center; gap: 14px; background: linear-gradient(135deg, var(--star-soft), var(--surface)); }
+.streak-n { display: grid; justify-items: center; line-height: 1; min-width: 56px; }
+.streak-n .flame { font-size: 2rem; }
+.streak-n b { font-family: var(--display); font-size: 1.8rem; }
+.sdots { display: flex; gap: 6px; margin-top: 6px; }
+.sdot { width: 14px; height: 14px; border-radius: 50%; background: var(--line); }
+.sdot.on { background: var(--star); }
+.cheer-card { background: linear-gradient(135deg, var(--good-soft), var(--surface)); border-color: var(--good); }
+.cheer { background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }

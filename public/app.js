@@ -258,6 +258,28 @@ async function kidWeek(main) {
   const starNum = h('b', { class: 'num' }, String(stars.v.total));
   const isCurrent = week.start <= today && today <= week.end;
   const prevOk = week.start > addDays(today, -90);
+  // عدّاد المواظبة + رسائل الخادم + الاحتفال
+  const loadStreak = async () => {
+    const r = await api('GET', '/api/streak').catch(() => null);
+    if (r) streakSlot.replaceChildren(streakCard(r));
+    return r;
+  };
+  const loadCheers = async () => {
+    const r = await api('GET', '/api/cheers').catch(() => null);
+    if (!r) return;
+    const card = cheerCard(r.cheers, async () => { await api('POST', '/api/cheers/seen', {}).catch(() => {}); cheerSlot.replaceChildren(); toast('ربنا يباركك'); });
+    cheerSlot.replaceChildren(...(card ? [card] : []));
+  };
+  const afterAction = async (kind) => {
+    const fn = firstName(state.me.user.name);
+    const s = await loadStreak();
+    const rec = week.days[today] || {};
+    const both = !!(rec.prayed && rec.gospel);
+    let sub = kind === 'prayer' ? 'ربنا يسمع صلاتك' : 'كلمة ربنا في قلبك';
+    if (both) sub = 'خلّصت صلاتك وقراءتك النهارده!';
+    if (s && [3, 5, 7, 10, 14, 21, 30].includes(s.current)) sub = `🔥 ${arDays(s.current)} ورا بعض. كمّل يا بطل!`;
+    celebrate(both ? `يوم كامل يا ${fn}!` : `برافو يا ${fn}!`, sub);
+  };
   // قراءة الإنجيل: مفيش تسجيل من غير ما الولد يكتب اللي قراه
   let readingOpen = false, readingEl = null;
   const buildReading = (cur) => {
@@ -280,6 +302,7 @@ async function kidWeek(main) {
       if (!(res.new_badges && res.new_badges.length)) toast('تم تسجيل القراءة');
       week.days[today] = { ...(week.days[today] || { prayed: false }), gospel: true };
       stars.v = res.stars; starNum.textContent = String(res.stars.total); readingOpen = false; draw();
+      afterAction('reading');
     });
     return h('div', { class: 'card stack reading-card' },
       h('h3', null, 'قريت إيه النهارده؟'),
@@ -307,6 +330,7 @@ async function kidWeek(main) {
         if (!res) return;
         week.days[d] = { ...rec, [field]: nextVal };
         stars.v = res.stars; starNum.textContent = String(res.stars.total); draw();
+        if (nextVal) afterAction('prayer');
       };
       const att = week.attendance.includes(d);
       return h('div', { class: 'day' + (d === today ? ' today' : '') },
@@ -319,6 +343,7 @@ async function kidWeek(main) {
       const res = await act(() => api('PUT', '/api/mass', { week_start: week.start, attended: !week.mass }));
       if (!res) return;
       week.mass = !week.mass; stars.v = res.stars; starNum.textContent = String(res.stars.total); draw();
+      if (week.mass) celebrate(`برافو يا ${firstName(state.me.user.name)}!`, 'ربنا يبارك القداس في حياتك');
     });
     massBtn.classList.add('wide');
     const confLocked = week.confession_month !== today.slice(0, 7);
@@ -326,6 +351,7 @@ async function kidWeek(main) {
       const res = await act(() => api('PUT', '/api/confession', { month: week.confession_month, confession: !week.confession }));
       if (!res) return;
       week.confession = !week.confession; stars.v = res.stars; starNum.textContent = String(res.stars.total); draw();
+      if (week.confession) celebrate(`برافو يا ${firstName(state.me.user.name)}!`, 'ربنا يفرّح قلبك');
     });
     confBtn.classList.add('wide');
     fill(box, 
@@ -340,11 +366,11 @@ async function kidWeek(main) {
       week.attendance.length > 0 && h('p', { class: 'muted small' }, `حضرت الاجتماع ${week.attendance.length} ${week.attendance.length > 2 ? 'مرات' : 'مرة'} الأسبوع ده، وخدت نجمة على كل مرة.`));
   };
   const box = h('div', { class: 'stack' });
-  const contentSlot = h('div');
+  const contentSlot = h('div'), streakSlot = h('div'), cheerSlot = h('div');
   fill(main, 
     h('div', { class: 'stars-hero' }, (() => { const s = icon('star'); s.setAttribute('class', 'big'); return s; })(),
       h('div', null, starNum, h('span', { class: 'muted' }, 'مجموع نجومك'))),
-    contentSlot,
+    streakSlot, cheerSlot, contentSlot,
     (() => { const b = state.me.birthday; if (!b || b.is_today) return null;
       return h('div', { class: 'card row bday-row' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic sm'); return c; })(),
         h('div', { class: 'grow' }, h('b', null, 'عمرك ' + ageText(b)), h('div', { class: 'muted small' }, `فاضل ${arDays(b.days_until)} على عيد ميلادك`))); })(),
@@ -355,7 +381,61 @@ async function kidWeek(main) {
     box,
     h('p', { class: 'muted small' }, 'علّم على صلاتك. وقراءة الإنجيل بتتسجل بعد ما تكتب اللي فهمته منها. تقدر تعدّل آخر أسبوعين بس.'));
   draw();
+  loadStreak(); loadCheers();
   api('GET', '/api/daily-content').then((c) => { if (c.item) contentSlot.replaceChildren(contentCard(c.item)); }).catch(() => {});
+}
+
+// احتفال لما الولد يخلّص حاجة: نجمة بتلمع + ورق ملوّن (بيتقفل لوحده)
+function celebrate(title, sub) {
+  const old = document.getElementById('celebrate'); if (old) old.remove();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const colors = ['var(--star)', 'var(--good)', 'var(--primary)', 'var(--bad)'];
+  const bits = reduce ? [] : Array.from({ length: 28 }, (_, i) => {
+    const el = h('i', { class: 'confetti' });
+    el.style.setProperty('--x', Math.round(Math.random() * 100) + '%');
+    el.style.setProperty('--d', (Math.random() * 0.5).toFixed(2) + 's');
+    el.style.setProperty('--t', (1.6 + Math.random() * 1.2).toFixed(2) + 's');
+    el.style.setProperty('--c', colors[i % colors.length]);
+    return el;
+  });
+  const star = icon('star'); star.setAttribute('class', 'cel-star');
+  const box = h('div', { id: 'celebrate', role: 'status', 'aria-live': 'polite', onclick: () => box.remove() },
+    bits, h('div', { class: 'cel' }, star, h('h2', null, title), sub && h('p', null, sub)));
+  document.body.append(box);
+  setTimeout(() => box.remove(), 3000);
+}
+// عدّاد المواظبة: اليوم بيتحسب لو صلّى أو قرأ
+function streakCard(r) {
+  const n = r.current;
+  const days = n === 1 ? 'يوم واحد' : arDays(n);
+  const sub = r.today_done ? 'كمّلت النهارده، ممتاز!' : n > 0 ? 'صلّي أو اقرا النهارده عشان السلسلة ماتقطعش' : 'صلّي أو اقرا النهارده وابدأ سلسلتك';
+  return h('div', { class: 'card streak-card' },
+    h('div', { class: 'streak-n' }, h('span', { class: 'flame', 'aria-hidden': 'true' }, '🔥'), h('b', { class: 'num' }, String(n))),
+    h('div', { class: 'grow' },
+      h('b', null, n > 0 ? `${days} ورا بعض` : 'سلسلة المواظبة'),
+      h('div', { class: 'muted small' }, sub),
+      h('div', { class: 'sdots', 'aria-label': 'آخر 7 أيام' }, r.last7.map((d) => h('span', { class: 'sdot' + (d.done ? ' on' : ''), title: dayName(d.day) }))),
+      r.best > n && h('div', { class: 'muted small' }, 'أحسن سلسلة ليك: ' + arDays(r.best))));
+}
+// رسالة تشجيع من الخادم
+function cheerCard(list, onDone) {
+  const fresh = list.filter((c) => !c.seen);
+  if (!fresh.length) return null;
+  return h('div', { class: 'card stack cheer-card' },
+    h('h3', null, fresh.length > 1 ? 'رسايل تشجيع ليك' : 'رسالة تشجيع ليك'),
+    fresh.map((c) => h('div', { class: 'cheer' }, h('p', { style: 'margin:0' }, '“' + c.text + '”'), h('span', { class: 'muted small' }, '- ' + c.by_name))),
+    h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: onDone }, 'شكراً'));
+}
+// الخادم يشجّع ولد
+function staffCheerCard(id, name) {
+  const text = h('input', { id: 'cheer', maxlength: 140, placeholder: 'اكتب كلمة تشجيع...', 'aria-label': 'رسالة التشجيع' });
+  const presets = ['برافو عليك!', 'فخور بيك', 'ربنا يباركك', 'كمّل يا بطل', 'افتقدناك، ننتظرك في الاجتماع'];
+  return h('div', { class: 'card stack' }, h('h3', null, 'شجّع ' + firstName(name)),
+    h('div', { class: 'row' }, presets.map((t) => h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { text.value = t; text.focus(); } }, t))),
+    text,
+    h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: async () => {
+      const x = await act(() => api('POST', '/api/staff/cheer', { user_id: id, text: text.value }), 'اتبعت رسالة التشجيع'); if (x) text.value = '';
+    } }, 'ابعت التشجيع'));
 }
 
 // آية أو قصة اليوم
@@ -384,6 +464,9 @@ async function kidStars(main) {
   const s = r.stars;
   const rankCard = await kidRanking();
   const badgeBox = await badgesCard();
+  const ch = await api('GET', '/api/cheers').catch(() => null);
+  const cheerList = ch && ch.cheers.length ? h('div', { class: 'card stack' }, h('h3', null, 'رسايل التشجيع'),
+    h('div', { class: 'list' }, ch.cheers.map((c) => h('div', { class: 'cheer' }, h('p', { style: 'margin:0' }, '“' + c.text + '”'), h('span', { class: 'muted small' }, `- ${c.by_name} (${c.created_at.slice(0, 10)})`))))) : null;
   const row = (label, n, hint) => h('div', { class: 'row between' }, h('span', null, label, hint && h('span', { class: 'muted small' }, ' ' + hint)), h('b', { class: 'num' }, (n > 0 && label.includes('الخدام') ? '+' : '') + n));
   fill(main, 
     h('div', { class: 'stars-hero' }, (() => { const x = icon('star'); x.setAttribute('class', 'big'); return x; })(),
@@ -399,6 +482,7 @@ async function kidStars(main) {
       row('زيادة أو خصم من الخدام', s.adjust)),
     rankCard,
     badgeBox,
+    cheerList,
     r.notes.length > 0 && h('div', { class: 'card stack' }, h('h3', null, 'ملاحظات من الخدام'),
       h('div', { class: 'list' }, r.notes.map((n) => h('div', { class: 'row between', style: 'align-items:flex-start' },
         h('div', { class: 'grow' }, h('div', null, n.text), h('span', { class: 'muted small num' }, n.created_at.slice(0, 10))),
@@ -627,6 +711,7 @@ async function staffKid(main, id) {
         h('thead', null, h('tr', null, h('th', null, 'اليوم'), h('th', null, 'صلاة'), h('th', null, 'إنجيل'))),
         h('tbody', null, r.days.map((d) => h('tr', null, h('td', null, `${dayName(d.day)} ${shortDate(d.day)}`), h('td', null, d.prayed ? h('span', { class: 'pill good' }, 'نعم') : '-'), h('td', null, d.gospel ? h('span', { class: 'pill good' }, 'نعم') : '-')))))) : h('p', { class: 'muted' }, 'لسه ما سجلش حاجة'),
       h('p', { class: 'muted small' }, 'القداس: ' + (r.masses.length ? r.masses.map(shortDate).join('، ') : 'لا يوجد'), h('br'), 'الاعتراف: ' + (r.confessions.length ? r.confessions.map(monthLabel).join('، ') : 'لا يوجد'), h('br'), 'حضور الاجتماع: ' + (r.attendance.length ? r.attendance.map(shortDate).join('، ') : 'لا يوجد'))),
+    canMark() && staffCheerCard(id, p.name),
     h('div', { class: 'card stack' }, h('h3', null, 'ملاحظات وتعديل النجوم'),
       canMark() ? h('div', { class: 'stack' },
         h('label', { class: 'f', for: 'ntext' }, h('span', null, 'الملاحظة'), noteText),

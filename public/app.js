@@ -274,7 +274,7 @@ async function kidWeek(main) {
   const loadCharacter = async () => {
     const c = await api('GET', '/api/my-character').catch(() => null);
     if (!c) return null;
-    charSlot.replaceChildren(characterCard(c, async (g) => { if (await act(() => api('POST', '/api/my-character', { gender: g }))) loadCharacter(); }));
+    charSlot.replaceChildren(characterCard(c));
     return c;
   };
   const afterAction = async (kind) => {
@@ -395,8 +395,8 @@ async function kidWeek(main) {
 }
 
 // رسم الشخصية: بتكبر وبيزيد عليها حاجات مع كل لقب (0 مبتدئ، 1 مجتهد، 2 بطل، 3 قدوة)
-function characterSvg(stage, gender) {
-  const girl = gender === 'girl', shirt = girl ? '#D4537E' : '#378ADD', hair = '#3B2A20', skin = '#E8B88A';
+function characterSvg(stage) {
+  const shirt = '#378ADD', hair = '#3B2A20', skin = '#E8B88A';
   const scale = [0.9, 1, 1.08, 1.15][stage] || 1;
   const hand = (x, y) => `<circle cx="${x}" cy="${y + 2}" r="4.5" fill="${skin}"/>`;
   const arm = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${shirt}" stroke-width="8" stroke-linecap="round"/>` + hand(x2, y2);
@@ -417,26 +417,22 @@ function characterSvg(stage, gender) {
   } else if (stage === 2) arms = arm(-20, -48, -30, -32) + arm(20, -48, 30, -32);
   else arms = arm(-20, -48, -30, -60) + arm(20, -48, 30, -60);
   if (stage >= 2) extra = '<path d="M-4 -55 L-1 -44 M4 -55 L1 -44" fill="none" stroke="#E24B4A" stroke-width="3"/><circle cx="0" cy="-38" r="6.5" fill="#EF9F27" stroke="#854F0B" stroke-width="1"/>';
-  const backHair = girl ? `<path d="M-21 -78 Q-23 -101 0 -101 Q23 -101 21 -78 L25 -50 Q13 -46 9 -56 L-9 -56 Q-13 -46 -25 -50 Z" fill="${hair}"/>` : '';
-  const bow = girl ? '<circle cx="-18" cy="-91" r="3.6" fill="#D4537E"/><circle cx="-10" cy="-93" r="3.6" fill="#D4537E"/><circle cx="-14" cy="-92" r="2" fill="#FBEAF0"/>' : '';
   const mouth = stage >= 2 ? 'M-6 -66 Q0 -59 6 -66' : 'M-6 -67 Q0 -62 6 -67';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 170" role="img" aria-label="شخصيتك"><g transform="translate(80 152) scale(${scale})">${back}` +
     '<rect x="-14" y="-18" width="11" height="18" rx="3" fill="#5F5E5A"/><rect x="3" y="-18" width="11" height="18" rx="3" fill="#5F5E5A"/><ellipse cx="-9" cy="1" rx="8" ry="4" fill="#2C2C2A"/><ellipse cx="9" cy="1" rx="8" ry="4" fill="#2C2C2A"/>' +
-    `<rect x="-20" y="-56" width="40" height="42" rx="9" fill="${shirt}"/>${arms}${extra}${backHair}<circle cx="0" cy="-76" r="19" fill="${skin}"/>` +
-    `<path d="M-19 -78 Q-19 -98 0 -98 Q19 -98 19 -78 Q8 -88 -19 -78 Z" fill="${hair}"/>${bow}${top}` +
+    `<rect x="-20" y="-56" width="40" height="42" rx="9" fill="${shirt}"/>${arms}${extra}<circle cx="0" cy="-76" r="19" fill="${skin}"/>` +
+    `<path d="M-19 -78 Q-19 -98 0 -98 Q19 -98 19 -78 Q8 -88 -19 -78 Z" fill="${hair}"/>${top}` +
     `<circle cx="-7" cy="-75" r="2" fill="#2C2C2A"/><circle cx="7" cy="-75" r="2" fill="#2C2C2A"/><path d="${mouth}" fill="none" stroke="#7A3E1D" stroke-width="1.8" stroke-linecap="round"/></g></svg>`;
 }
 // كارت الشخصية واللقب: بيظهر للولد نفسه بس
-function characterCard(c, setGender) {
+function characterCard(c) {
   const art = h('div', { class: 'char-art' });
-  art.append(document.importNode(new DOMParser().parseFromString(characterSvg(c.stage, c.gender), 'image/svg+xml').documentElement, true));
-  const gbtn = (g, label) => h('button', { class: 'btn ghost sm', type: 'button', 'aria-pressed': String(c.gender === g), onclick: () => { if (c.gender !== g) setGender(g); } }, label);
+  art.append(document.importNode(new DOMParser().parseFromString(characterSvg(c.stage), 'image/svg+xml').documentElement, true));
   return h('div', { class: 'card char-card' }, art,
     h('div', { class: 'grow stack' },
       h('div', { class: 'row between' }, h('h2', { style: 'margin:0' }, c.stage_name), h('span', { class: 'pill star num' }, `المستوى ${c.level}`)),
       h('div', { class: 'progress', role: 'progressbar', 'aria-valuenow': String(c.pct), 'aria-valuemin': '0', 'aria-valuemax': '100' }, h('i', { style: `width:${c.pct}%` })),
-      h('p', { class: 'muted small', style: 'margin:0' }, c.next_name ? `باقي ${c.to_next} نجمة وتبقى «${c.next_name}»` : 'وصلت لأعلى لقب. كمّل يا بطل!'),
-      h('div', { class: 'row' }, gbtn('boy', 'ولد'), gbtn('girl', 'بنت'))));
+      h('p', { class: 'muted small', style: 'margin:0' }, c.next_name ? `باقي ${c.to_next} نجمة وتبقى «${c.next_name}»` : 'وصلت لأعلى لقب. كمّل يا بطل!')));
 }
 // احتفال لما الولد يخلّص حاجة: نجمة بتلمع + ورق ملوّن (بيتقفل لوحده)
 function celebrate(title, sub) {

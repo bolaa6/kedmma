@@ -95,6 +95,7 @@ async function api(method, url, body) {
   try { data = await res.json(); } catch { /* تجاهل */ }
   if (res.status === 401 && state.me) { state.me = null; showAuth(); throw new Error('انتهت الجلسة. سجّل الدخول تاني'); }
   if (!res.ok) throw new Error(data.error || 'حصلت مشكلة');
+  if (Array.isArray(data.new_badges) && data.new_badges.length) toast('شارة جديدة: ' + data.new_badges.map((b) => b.icon + ' ' + b.title).join('، '));
   return data;
 }
 async function act(fn, okMsg) {
@@ -257,6 +258,42 @@ async function kidWeek(main) {
   const starNum = h('b', { class: 'num' }, String(stars.v.total));
   const isCurrent = week.start <= today && today <= week.end;
   const prevOk = week.start > addDays(today, -90);
+  // قراءة الإنجيل: مفيش تسجيل من غير ما الولد يكتب اللي قراه
+  let readingOpen = false, readingEl = null;
+  const buildReading = (cur) => {
+    const ref = h('input', { id: 'rref', placeholder: 'مثال: يوحنا 3', maxlength: 80, value: cur.reading ? cur.reading.ref : '' });
+    const note = h('textarea', { id: 'rnote', maxlength: 800, placeholder: 'اكتب بكلامك إيه اللي فهمته من القراءة...' });
+    note.value = cur.reading ? cur.reading.note : '';
+    const hint = h('span', { class: 'muted small' });
+    const save = h('button', { class: 'btn', type: 'button', disabled: true }, cur.reading ? 'حفظ التعديل' : 'سجّل القراءة');
+    const words = (t) => t.trim().split(/\s+/).filter(Boolean).length;
+    const check = () => {
+      const n = note.value.trim(), left = cur.min_chars - n.length;
+      const okRef = ref.value.trim().length >= 3, okNote = n.length >= cur.min_chars && words(n) >= cur.min_words;
+      save.disabled = !(okRef && okNote);
+      hint.textContent = !okRef ? 'اكتب اسم الإصحاح الأول' : okNote ? 'تمام، تقدر تسجّل' : left > 0 ? `باقي ${left} حرف على الأقل` : `اكتب ${cur.min_words} كلمات على الأقل`;
+    };
+    ref.addEventListener('input', check); note.addEventListener('input', check); check();
+    save.addEventListener('click', async () => {
+      const res = await act(() => api('PUT', '/api/reading', { ref: ref.value, note: note.value }));
+      if (!res) return;
+      if (!(res.new_badges && res.new_badges.length)) toast('تم تسجيل القراءة');
+      week.days[today] = { ...(week.days[today] || { prayed: false }), gospel: true };
+      stars.v = res.stars; starNum.textContent = String(res.stars.total); readingOpen = false; draw();
+    });
+    return h('div', { class: 'card stack reading-card' },
+      h('h3', null, 'قريت إيه النهارده؟'),
+      h('label', { class: 'f', for: 'rref' }, h('span', null, 'الإصحاح أو الجزء اللي قريته'), ref),
+      h('label', { class: 'f', for: 'rnote' }, h('span', null, 'اكتب اللي فهمته'), note),
+      hint,
+      h('div', { class: 'row' }, save, h('button', { class: 'btn ghost', type: 'button', onclick: () => { readingOpen = false; draw(); } }, 'إلغاء')));
+  };
+  const openReading = async () => {
+    if (readingOpen) { readingOpen = false; return draw(); }
+    const cur = await act(() => api('GET', '/api/reading'));
+    if (!cur) return;
+    readingEl = buildReading(cur); readingOpen = true; draw();
+  };
   const draw = () => {
     const days = [];
     for (let i = 0; i < 7; i++) days.push(addDays(week.start, i));
@@ -275,7 +312,7 @@ async function kidWeek(main) {
       return h('div', { class: 'day' + (d === today ? ' today' : '') },
         h('div', { class: 'dn' }, h('b', null, d === today ? 'النهارده' : dayName(d)), h('span', null, shortDate(d)), att && h('span', { class: 'pill good', style: 'margin-top:2px' }, 'حضرت')),
         mkChip('صليت', rec.prayed, locked, toggle('prayed')),
-        mkChip('قريت الإنجيل', rec.gospel, locked, toggle('gospel')));
+        mkChip('قريت الإنجيل', rec.gospel, locked, openReading));
     });
     const massLocked = !(week.start <= today && today <= week.end);
     const massBtn = mkChip(week.mass ? 'رحت القداس' : 'رحت القداس الأسبوع ده', week.mass, massLocked, async () => {
@@ -292,6 +329,7 @@ async function kidWeek(main) {
     });
     confBtn.classList.add('wide');
     fill(box, 
+      readingOpen && readingEl,
       h('div', { class: 'card' }, h('div', { class: 'list' }, dayRows)),
       h('div', { class: 'card stack' },
         h('div', { class: 'row between' }, h('h3', null, 'القداس'), h('span', { class: 'pill' }, 'مرة في الأسبوع')),
@@ -302,9 +340,11 @@ async function kidWeek(main) {
       week.attendance.length > 0 && h('p', { class: 'muted small' }, `حضرت الاجتماع ${week.attendance.length} ${week.attendance.length > 2 ? 'مرات' : 'مرة'} الأسبوع ده، وخدت نجمة على كل مرة.`));
   };
   const box = h('div', { class: 'stack' });
+  const contentSlot = h('div');
   fill(main, 
     h('div', { class: 'stars-hero' }, (() => { const s = icon('star'); s.setAttribute('class', 'big'); return s; })(),
       h('div', null, starNum, h('span', { class: 'muted' }, 'مجموع نجومك'))),
+    contentSlot,
     (() => { const b = state.me.birthday; if (!b || b.is_today) return null;
       return h('div', { class: 'card row bday-row' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic sm'); return c; })(),
         h('div', { class: 'grow' }, h('b', null, 'عمرك ' + ageText(b)), h('div', { class: 'muted small' }, `فاضل ${arDays(b.days_until)} على عيد ميلادك`))); })(),
@@ -313,8 +353,28 @@ async function kidWeek(main) {
       h('b', { class: 'num', style: 'text-align:center' }, isCurrent ? 'الأسبوع ده' : weekLabel(week.start, week.end)),
       h('button', { class: 'btn ghost sm', type: 'button', disabled: isCurrent, onclick: () => { state.kidWeek = addDays(week.start, 7); renderKid(); } }, 'الأسبوع الجاي')),
     box,
-    h('p', { class: 'muted small' }, 'علّم على اللي عملته. تقدر تعدّل آخر أسبوعين بس.'));
+    h('p', { class: 'muted small' }, 'علّم على صلاتك. وقراءة الإنجيل بتتسجل بعد ما تكتب اللي فهمته منها. تقدر تعدّل آخر أسبوعين بس.'));
   draw();
+  api('GET', '/api/daily-content').then((c) => { if (c.item) contentSlot.replaceChildren(contentCard(c.item)); }).catch(() => {});
+}
+
+// آية أو قصة اليوم
+function contentCard(it) {
+  const story = it.kind === 'story';
+  return h('div', { class: 'card stack daily-card' },
+    h('div', { class: 'row between' }, h('h3', null, story ? it.title : 'آية النهارده'), h('span', { class: 'pill' }, story ? 'قصة النهارده' : 'آية')),
+    h('p', { class: 'daily-text' }, story ? it.text : '“' + it.text + '”'),
+    !story && it.ref && h('span', { class: 'muted small' }, it.ref));
+}
+// شارات الولد
+async function badgesCard() {
+  const r = await act(() => api('GET', '/api/badges'));
+  if (!r) return null;
+  const got = r.badges.filter((b) => b.earned).length;
+  return h('div', { class: 'card stack' },
+    h('div', { class: 'row between' }, h('h3', null, 'شاراتي'), h('span', { class: 'pill' }, `${got} من ${r.badges.length}`)),
+    h('div', { class: 'badges' }, r.badges.map((b) => h('div', { class: 'badge' + (b.earned ? ' on' : ''), title: b.desc },
+      h('span', { class: 'bi', 'aria-hidden': 'true' }, b.icon), h('b', null, b.title), h('span', { class: 'muted small' }, b.earned ? b.desc : `${b.have} من ${b.need}`)))));
 }
 
 async function kidStars(main) {
@@ -323,6 +383,7 @@ async function kidStars(main) {
   if (!r) return;
   const s = r.stars;
   const rankCard = await kidRanking();
+  const badgeBox = await badgesCard();
   const row = (label, n, hint) => h('div', { class: 'row between' }, h('span', null, label, hint && h('span', { class: 'muted small' }, ' ' + hint)), h('b', { class: 'num' }, (n > 0 && label.includes('الخدام') ? '+' : '') + n));
   fill(main, 
     h('div', { class: 'stars-hero' }, (() => { const x = icon('star'); x.setAttribute('class', 'big'); return x; })(),
@@ -337,6 +398,7 @@ async function kidStars(main) {
       s.game > 0 && row('لعبة السلم والتعبان', s.game, 'نجمة لكل سؤال صح'),
       row('زيادة أو خصم من الخدام', s.adjust)),
     rankCard,
+    badgeBox,
     r.notes.length > 0 && h('div', { class: 'card stack' }, h('h3', null, 'ملاحظات من الخدام'),
       h('div', { class: 'list' }, r.notes.map((n) => h('div', { class: 'row between', style: 'align-items:flex-start' },
         h('div', { class: 'grow' }, h('div', null, n.text), h('span', { class: 'muted small num' }, n.created_at.slice(0, 10))),
@@ -415,7 +477,7 @@ function kidProfile(main) {
     h('p', { class: 'muted small' }, 'تقدر تعدّل بياناتك في أي وقت. مينفعش تتمسح بعد ما تتسجل.'));
   fill(main, 
     !p.complete && h('div', { class: 'notice' }, 'كمّل بياناتك الأول عشان الخدام يقدروا يتواصلوا مع أهلك.'),
-    photoBox, form, installCard(), passwordCard(),
+    photoBox, form, pushCard(), installCard(), passwordCard(),
     h('button', { class: 'btn ghost', type: 'button', onclick: logout }, 'تسجيل الخروج'));
 }
 
@@ -458,6 +520,19 @@ function renderStaff() {
   else staffMe(main);
 }
 
+// الأولاد اللي غابوا آخر اجتماعات
+function absentCard(r) {
+  if (!r.kids.length) return null;
+  return h('div', { class: 'card stack' },
+    h('div', { class: 'row between' }, h('h3', null, 'محتاجين افتقاد'), h('span', { class: 'pill bad' }, String(r.kids.length))),
+    h('p', { class: 'muted small' }, `غابوا آخر ${r.n === 2 ? 'اجتماعين' : r.n + ' اجتماعات'} (${r.sessions.map(shortDate).join('، ')})`),
+    h('div', { class: 'list' }, r.kids.map((k) => h('div', { class: 'row between' },
+      h('div', null, h('b', null, k.name), h('div', { class: 'muted small' }, k.last ? 'آخر حضور: ' + shortDate(k.last) : 'لسه ما حضرش قبل كده')),
+      h('div', { class: 'row' },
+        canMark() && k.phone && h('a', { class: 'btn ghost sm', href: waLink(k.phone, `سلام عليكم، افتقدنا ${firstName(k.name)} في الاجتماع. ربنا يطمّنا عليه.`), target: '_blank', rel: 'noopener', style: 'text-decoration:none' }, 'واتساب'),
+        h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { state.openKid = k.id; renderStaff(); } }, 'فتح'))))));
+}
+
 let overviewWeek = null;
 async function staffOverview(main) {
   fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
@@ -485,6 +560,8 @@ async function staffOverview(main) {
     if (!rows.length) fill(tbody, h('tr', null, h('td', { colspan: 12, style: 'text-align:center;padding:24px' }, r.kids.length ? 'مفيش نتيجة' : 'لسه مفيش أولاد سجلوا في الموقع')));
   };
   search.addEventListener('input', draw);
+  const absentSlot = h('div');
+  api('GET', '/api/staff/absent').then((a) => { const c = absentCard(a); if (c) absentSlot.replaceChildren(c); }).catch(() => {});
   const complete = r.kids.filter((k) => k.complete).length;
   const attendedWeek = r.kids.filter((k) => k.attendance.length).length;
   fill(main, 
@@ -492,6 +569,7 @@ async function staffOverview(main) {
       h('div', { class: 'stat' }, h('b', { class: 'num' }, String(r.kids.length)), h('span', null, 'ولد مسجل')),
       h('div', { class: 'stat' }, h('b', { class: 'num' }, String(r.kids.length - complete)), h('span', null, 'بياناتهم ناقصة')),
       h('div', { class: 'stat' }, h('b', { class: 'num' }, String(attendedWeek)), h('span', null, 'حضروا الأسبوع ده'))),
+    absentSlot,
     h('div', { class: 'row between' },
       h('div', { class: 'weeknav grow' },
         h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { overviewWeek = addDays(r.start, -7); renderStaff(); } }, 'الأسبوع اللي فات'),
@@ -520,6 +598,12 @@ async function staffKid(main, id) {
     if (res) renderStaff();
   };
   let pw = null;
+  const extrasSlot = h('div', { class: 'stack' });
+  api('GET', `/api/staff/kid-extras/${id}`).then((x) => fill(extrasSlot,
+    h('div', { class: 'card stack' }, h('h3', null, `الشارات (${x.badges.length})`),
+      x.badges.length ? h('div', { class: 'badges' }, x.badges.map((b) => h('div', { class: 'badge on', title: b.desc }, h('span', { class: 'bi', 'aria-hidden': 'true' }, b.icon), h('b', null, b.title)))) : h('p', { class: 'muted' }, 'لسه مخدش شارات')),
+    h('div', { class: 'card stack' }, h('h3', null, 'اللي كتبه عن قراءته'),
+      x.readings.length ? h('div', { class: 'list' }, x.readings.map((rd) => h('div', { class: 'read-note' }, h('div', { class: 'row between' }, h('b', null, rd.ref), h('span', { class: 'muted small num' }, `${dayName(rd.day)} ${shortDate(rd.day)}`)), h('p', { style: 'margin:.3rem 0 0' }, rd.note)))) : h('p', { class: 'muted' }, 'لسه ما كتبش حاجة')))).catch(() => {});
   fill(main, 
     h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.openKid = null; renderStaff(); } }, 'رجوع للقائمة'),
     h('div', { class: 'card stack' },
@@ -537,6 +621,7 @@ async function staffKid(main, id) {
       h('div', { class: 'stats' },
         [['الصلاة', s.prayer], ['الإنجيل', s.gospel], ['القداس', s.mass], ['الاعتراف', s.confession], ['الاجتماع', s.attendance], ['المسابقة', s.quiz], ['اللعبة', s.game || 0], ['زيادة/خصم', s.adjust]].map(([l, n]) =>
           h('div', { class: 'stat' }, h('b', { class: 'num' }, String(n)), h('span', null, l))))),
+    extrasSlot,
     h('div', { class: 'card stack' }, h('h3', null, 'آخر 4 أسابيع'),
       r.days.length ? h('div', { class: 'tablebox' }, h('table', null,
         h('thead', null, h('tr', null, h('th', null, 'اليوم'), h('th', null, 'صلاة'), h('th', null, 'إنجيل'))),
@@ -616,7 +701,8 @@ async function staffTeam(main) {
   const reqCard = await resetRequestsCard(() => renderStaff());
   const gameCard = await gameAdminCard();
   const lvCard = await levelCard();
-  fill(main, reqCard, gameCard, lvCard,
+  const contentCardAdmin = await contentAdminCard();
+  fill(main, reqCard, gameCard, lvCard, contentCardAdmin,
     h('div', { class: 'card stack' }, h('h3', null, 'الخدام والمتابعين'),
       h('div', { class: 'list' }, r.staff.map((u) => h('div', { class: 'row between' },
         h('div', null, h('b', null, u.name), h('div', { class: 'muted small ltr', style: 'text-align:start' }, u.phone)),
@@ -930,8 +1016,9 @@ function installCard() {
 const urlB64 = (s) => { const b = (s + '='.repeat((4 - (s.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'); return Uint8Array.from(atob(b), (c) => c.charCodeAt(0)); };
 function pushCard() {
   const box = h('div', { class: 'card stack' });
+  const isKid = state.me.user.role === 'kid';
   const draw = async () => {
-    const title = h('h3', null, 'تنبيهات أعياد الميلاد على الموبايل');
+    const title = h('h3', null, isKid ? 'تذكير يومي على الموبايل' : 'تنبيهات الموبايل (أعياد الميلاد والغايبين)');
     const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     if (!ok) {
       return fill(box, title, h('p', { class: 'muted' }, isIOS()
@@ -942,14 +1029,14 @@ function pushCard() {
     try { sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription(); } catch { /* تجاهل */ }
     if (Notification.permission === 'denied') return fill(box, title, h('p', { class: 'notice' }, 'التنبيهات مقفولة من إعدادات المتصفح للموقع ده. افتحها من هناك وارجع جرّب.'));
     if (sub) {
-      return fill(box, title, h('p', null, 'التنبيهات شغالة على الجهاز ده. هيجيلك إشعار الصبح في يوم عيد ميلاد أي ولد.'),
+      return fill(box, title, h('p', null, isKid ? 'التذكير شغال على الجهاز ده. هيجيلك إشعار بالمغرب لو لسه ما خلّصتش صلاتك وقراءة الإنجيل.' : 'التنبيهات شغالة على الجهاز ده. هيجيلك إشعار الصبح في يوم عيد ميلاد أي ولد، ولما يكون فيه أولاد غابوا عن الاجتماعات.'),
         h('div', { class: 'row' },
           h('button', { class: 'btn ghost sm', type: 'button', onclick: () => act(() => api('POST', '/api/push/test'), 'اتبعت إشعار تجريبي') }, 'جرّب إشعار تجريبي'),
           h('button', { class: 'btn bad sm', type: 'button', onclick: async () => {
             await act(() => api('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint })); await sub.unsubscribe().catch(() => {}); draw();
           } }, 'إيقاف التنبيهات')));
     }
-    fill(box, title, h('p', { class: 'muted' }, 'فعّل التنبيهات عشان يوصلك إشعار على الموبايل حتى لو الموقع مقفول.'),
+    fill(box, title, h('p', { class: 'muted' }, isKid ? 'فعّل التذكير عشان يفكّرك بصلاتك وقراءتك كل يوم حتى لو الموقع مقفول.' : 'فعّل التنبيهات عشان يوصلك إشعار على الموبايل حتى لو الموقع مقفول.'),
       h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: async () => {
         try {
           const perm = await Notification.requestPermission();
@@ -1340,6 +1427,31 @@ function gameScreen(main, id) {
 }
 
 // ----- تحكم المسؤول في اللعبة -----
+async function contentAdminCard() {
+  const first = await act(() => api('GET', '/api/admin/content'));
+  if (!first) return null;
+  const box = h('div', { class: 'card stack' });
+  const reload = async () => { const x = await act(() => api('GET', '/api/admin/content')); if (x) paint(x); };
+  const paint = (r) => {
+    const kind = h('select', { id: 'ckind', 'aria-label': 'النوع' }, h('option', { value: 'verse' }, 'آية'), h('option', { value: 'story' }, 'قصة قصيرة'));
+    const title = h('input', { id: 'ctitle', placeholder: 'عنوان القصة (للقصص بس)' });
+    const text = h('textarea', { id: 'ctext', placeholder: 'نص الآية أو القصة' });
+    const ref = h('input', { id: 'cref', placeholder: 'المرجع للآيات، مثال: يوحنا 3: 16' });
+    fill(box, h('h3', null, 'آية وقصة اليوم'),
+      h('p', { class: 'muted small' }, `الموقع بيعرض واحدة كل يوم بالترتيب من ${r.items.length} عنصر. زوّد عليهم أو امسح اللي مش عايزه.`),
+      h('details', { class: 'stack' }, h('summary', null, `المحتوى (${r.items.length})`),
+        h('div', { class: 'list' }, r.items.map((it) => h('div', { class: 'row between', style: 'align-items:flex-start' },
+          h('div', { class: 'grow' }, h('div', null, it.kind === 'story' ? 'قصة: ' + it.title : it.text), h('div', { class: 'muted small' }, it.kind === 'story' ? it.text.slice(0, 80) + '...' : it.ref)),
+          sureButton('حذف', 'تأكيد', async () => { await act(() => api('DELETE', `/api/admin/content/${it.id}`)); reload(); })))),
+        h('div', { class: 'stack' }, h('b', null, 'إضافة'), kind, title, text, ref,
+          h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: async () => {
+            const x = await act(() => api('POST', '/api/admin/content', { kind: kind.value, title: title.value, text: text.value, ref: ref.value }), 'تمت الإضافة'); if (x) reload();
+          } }, 'إضافة'))));
+  };
+  paint(first);
+  return box;
+}
+
 async function gameAdminCard() {
   const r = await act(() => api('GET', '/api/admin/game'));
   if (!r) return null;

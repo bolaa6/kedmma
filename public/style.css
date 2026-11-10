@@ -287,3 +287,14 @@ body.staff { padding-block-end: calc(84px + env(safe-area-inset-bottom)); }
 .seg button[data-new] { position: relative; }
 .seg button[data-new]::after { top: 4px; inset-inline-end: 6px; }
 @media (min-width: 900px) { .snav button[data-new]::after { top: 50%; transform: translateY(-50%); inset-inline-end: 14px; } }
+
+/* ===== قراءة الإنجيل + الشارات + آية اليوم ===== */
+.daily-card { background: linear-gradient(135deg, var(--primary-soft), var(--surface)); }
+.daily-text { font-size: 1.08rem; line-height: 1.9; margin: 0; }
+.reading-card textarea { min-height: 110px; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.badge { display: grid; justify-items: center; align-content: start; gap: 2px; text-align: center; padding: 10px 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); opacity: .55; filter: grayscale(1); }
+.badge.on { opacity: 1; filter: none; background: var(--star-soft); border-color: var(--star); }
+.badge .bi { font-size: 1.9rem; line-height: 1.2; }
+.badge b { font-size: .9rem; }
+.read-note { background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }

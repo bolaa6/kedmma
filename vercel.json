@@ -39,8 +39,12 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/birthdays",
+      "path": "/api/cron/morning",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/evening",
+      "schedule": "0 16 * * *"
     }
   ]
 }

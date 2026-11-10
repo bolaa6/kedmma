@@ -95,7 +95,7 @@ async function api(method, url, body) {
   try { data = await res.json(); } catch { /* تجاهل */ }
   if (res.status === 401 && state.me) { state.me = null; showAuth(); throw new Error('انتهت الجلسة. سجّل الدخول تاني'); }
   if (!res.ok) throw new Error(data.error || 'حصلت مشكلة');
-  if (Array.isArray(data.new_badges) && data.new_badges.length) toast('شارة جديدة: ' + data.new_badges.map((b) => b.icon + ' ' + b.title).join('، '));
+  if (Array.isArray(data.new_badges) && data.new_badges.length) toast('إشارة جديدة: ' + data.new_badges.map((b) => b.icon + ' ' + b.title).join('، '));
   return data;
 }
 async function act(fn, okMsg) {
@@ -446,15 +446,15 @@ function contentCard(it) {
     h('p', { class: 'daily-text' }, story ? it.text : '“' + it.text + '”'),
     !story && it.ref && h('span', { class: 'muted small' }, it.ref));
 }
-// شارات الولد
+// إشارات الولد
 async function badgesCard() {
   const r = await act(() => api('GET', '/api/badges'));
   if (!r) return null;
   const got = r.badges.filter((b) => b.earned).length;
   return h('div', { class: 'card stack' },
-    h('div', { class: 'row between' }, h('h3', null, 'شاراتي'), h('span', { class: 'pill' }, `${got} من ${r.badges.length}`)),
+    h('div', { class: 'row between' }, h('h3', null, 'إشاراتي'), h('span', { class: 'pill' }, `${got} من ${r.badges.length}`)),
     h('div', { class: 'badges' }, r.badges.map((b) => h('div', { class: 'badge' + (b.earned ? ' on' : ''), title: b.desc },
-      h('span', { class: 'bi', 'aria-hidden': 'true' }, b.icon), h('b', null, b.title), h('span', { class: 'muted small' }, b.earned ? b.desc : `${b.have} من ${b.need}`)))));
+      h('span', { class: 'bi', 'aria-hidden': 'true' }, b.icon), h('b', null, b.title), h('span', { class: 'muted small' }, b.earned ? b.desc : b.kind === 'manual' ? 'الخادم بيمنحها' : `${b.have} من ${b.need}`)))));
 }
 
 async function kidStars(main) {
@@ -574,7 +574,7 @@ function renderStaff() {
   const me = state.me.user;
   if (!state.tab) state.tab = 'overview';
   const tabs = [['overview', 'المتابعة', 'week', 1], ['attendance', 'الحضور', 'check', 1], ['quiz', 'المسابقة', 'trophy', 1], ['library', 'المكتبة', 'book', 1],
-    ['reports', 'التقارير', 'chart', 0], ['ranking', 'الترتيب', 'podium', 0]];
+    ['reports', 'التقارير', 'chart', 0], ['ranking', 'الترتيب', 'podium', 0], ['badges', 'الإشارات', 'star', 0]];
   if (me.role === 'admin') tabs.push(['team', 'الخدام والإعدادات', 'tune', 0]);
   tabs.push(['me', 'حسابي', 'user', 0]);
   const go = (id) => { state.tab = id; state.openKid = null; state.staffContest = null; state.builder = null; state.openReport = null; renderStaff(); };
@@ -600,6 +600,7 @@ function renderStaff() {
   else if (state.tab === 'quiz') staffQuiz(main);
   else if (state.tab === 'reports') staffReports(main);
   else if (state.tab === 'ranking') staffRanking(main);
+  else if (state.tab === 'badges') staffBadges(main);
   else if (state.tab === 'team') staffTeam(main);
   else staffMe(main);
 }
@@ -683,11 +684,22 @@ async function staffKid(main, id) {
   };
   let pw = null;
   const extrasSlot = h('div', { class: 'stack' });
-  api('GET', `/api/staff/kid-extras/${id}`).then((x) => fill(extrasSlot,
-    h('div', { class: 'card stack' }, h('h3', null, `الشارات (${x.badges.length})`),
-      x.badges.length ? h('div', { class: 'badges' }, x.badges.map((b) => h('div', { class: 'badge on', title: b.desc }, h('span', { class: 'bi', 'aria-hidden': 'true' }, b.icon), h('b', null, b.title)))) : h('p', { class: 'muted' }, 'لسه مخدش شارات')),
-    h('div', { class: 'card stack' }, h('h3', null, 'اللي كتبه عن قراءته'),
-      x.readings.length ? h('div', { class: 'list' }, x.readings.map((rd) => h('div', { class: 'read-note' }, h('div', { class: 'row between' }, h('b', null, rd.ref), h('span', { class: 'muted small num' }, `${dayName(rd.day)} ${shortDate(rd.day)}`)), h('p', { style: 'margin:.3rem 0 0' }, rd.note)))) : h('p', { class: 'muted' }, 'لسه ما كتبش حاجة')))).catch(() => {});
+  const loadExtras = () => api('GET', `/api/staff/kid-extras/${id}`).then((x) => {
+    const pick = h('select', { 'aria-label': 'إشارة يدوية' }, x.manual.map((m) => h('option', { value: m.code }, `${m.icon} ${m.title}`)));
+    const earnedCodes = new Set(x.badges.map((b) => b.code));
+    const giveable = x.manual.filter((m) => !earnedCodes.has(m.code));
+    return fill(extrasSlot,
+      h('div', { class: 'card stack' }, h('h3', null, `الإشارات (${x.badges.length})`),
+        x.badges.length ? h('div', { class: 'badges' }, x.badges.map((b) => h('div', { class: 'badge on', title: b.desc },
+          h('span', { class: 'bi', 'aria-hidden': 'true' }, b.icon), h('b', null, b.title),
+          canMark() && b.kind === 'manual' && h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await act(() => api('POST', '/api/staff/badge-revoke', { user_id: id, code: b.code }), 'اتسحبت الإشارة')) loadExtras(); } }, 'سحب')))) : h('p', { class: 'muted' }, 'لسه مخدش إشارات'),
+        canMark() && giveable.length > 0 && h('div', { class: 'row' }, (() => { pick.replaceChildren(...giveable.map((m) => h('option', { value: m.code }, `${m.icon} ${m.title}`))); return pick; })(),
+          h('button', { class: 'btn', type: 'button', onclick: async () => { if (await act(() => api('POST', '/api/staff/badge-give', { user_id: id, code: pick.value }), 'اتمنحت الإشارة')) loadExtras(); } }, 'امنح الإشارة'))),
+      h('div', { class: 'card stack' }, h('h3', null, 'اللي كتبه عن قراءته'),
+        x.readings.length ? h('div', { class: 'list' }, x.readings.map((rd) => h('div', { class: 'read-note' }, h('div', { class: 'row between' }, h('b', null, rd.ref), h('span', { class: 'muted small num' }, `${dayName(rd.day)} ${shortDate(rd.day)}`)), h('p', { style: 'margin:.3rem 0 0' }, rd.note)))) : h('p', { class: 'muted' }, 'لسه ما كتبش حاجة')));
+  }).catch(() => {});
+  loadExtras();
+
   fill(main, 
     h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.openKid = null; renderStaff(); } }, 'رجوع للقائمة'),
     h('div', { class: 'card stack' },
@@ -1512,6 +1524,59 @@ function gameScreen(main, id) {
 }
 
 // ----- تحكم المسؤول في اللعبة -----
+// إدارة الإشارات: المسؤول والخدام يضيفوا ويعدّلوا ويوقفوا، والمسؤول بس يحذف
+async function staffBadges(main) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', '/api/admin/badges'));
+  if (!r) return;
+  const edit = canMark(), isAdmin = state.me.user.role === 'admin';
+  const reload = () => staffBadges(main);
+  const ruleLabel = (k) => (r.rules.find((x) => x.rule === k) || {}).label || '';
+  const ruleSel = (cur) => { const sel = h('select', { 'aria-label': 'الشرط' }, r.rules.map((x) => h('option', { value: x.rule }, x.label))); sel.value = cur; return sel; };
+  const iconIn = (v) => { const i = h('input', { maxlength: 8, placeholder: '🎯', 'aria-label': 'الأيقونة', style: 'width:4.5rem;text-align:center;font-size:1.4rem' }); i.value = v; return i; };
+  const txtIn = (v, ph, max) => { const i = h('input', { maxlength: max, placeholder: ph, 'aria-label': ph }); i.value = v; return i; };
+  const numIn = (v) => { const i = h('input', { type: 'number', min: 1, max: 10000, 'aria-label': 'الرقم' }); i.value = String(v); return i; };
+
+  const addCard = () => {
+    const ic = iconIn(''), title = txtIn('', 'اسم الإشارة', 40), desc = txtIn('', 'وصف قصير (اختياري)', 100);
+    const kind = h('select', { 'aria-label': 'النوع' }, h('option', { value: 'auto' }, 'تلقائية: الموقع يمنحها لوحده'), h('option', { value: 'manual' }, 'يدوية: الخادم يمنحها لولد معيّن'));
+    const rule = ruleSel(r.rules[0].rule), need = numIn(1);
+    const autoRow = h('div', { class: 'row' }, rule, need, h('span', { class: 'muted small' }, 'أو أكتر'));
+    kind.addEventListener('change', () => { autoRow.hidden = kind.value === 'manual'; });
+    return h('div', { class: 'card stack' }, h('h3', null, 'إضافة إشارة جديدة'),
+      h('div', { class: 'row' }, ic, h('div', { class: 'grow' }, title)), desc, kind, autoRow,
+      h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: async () => {
+        const x = await act(() => api('POST', '/api/admin/badges', { icon: ic.value, title: title.value, description: desc.value, kind: kind.value, rule: rule.value, need: Number(need.value) }), 'اتضافت الإشارة');
+        if (x) reload();
+      } }, 'إضافة'));
+  };
+
+  const item = (b) => {
+    const ic = iconIn(b.icon), title = txtIn(b.title, 'اسم الإشارة', 40), desc = txtIn(b.description, 'الوصف', 100);
+    const rule = ruleSel(b.rule), need = numIn(b.need);
+    return h('div', { class: 'card stack' + (b.active ? '' : ' off') },
+      h('div', { class: 'row between' },
+        h('div', { class: 'row' }, h('span', { class: 'bi-lg', 'aria-hidden': 'true' }, b.icon), h('div', null, h('b', null, b.title), h('div', { class: 'muted small' }, b.description))),
+        h('span', { class: 'pill' }, `${b.earned_count} ولد`)),
+      h('div', { class: 'muted small' }, (b.kind === 'auto' ? `تلقائية: ${ruleLabel(b.rule)} ${b.need} أو أكتر` : 'يدوية: الخادم يمنحها من صفحة الولد') + (b.active ? '' : ' (موقوفة)')),
+      edit && h('details', { class: 'stack' }, h('summary', null, 'تعديل'),
+        h('div', { class: 'row' }, ic, h('div', { class: 'grow' }, title)), desc,
+        b.kind === 'auto' && h('div', { class: 'row' }, rule, need),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn', type: 'button', onclick: async () => {
+            const x = await act(() => api('PATCH', `/api/admin/badges/${b.id}`, { icon: ic.value, title: title.value, description: desc.value, rule: rule.value, need: Number(need.value) }), 'اتحفظ التعديل');
+            if (x) reload();
+          } }, 'حفظ'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: async () => { if (await act(() => api('PATCH', `/api/admin/badges/${b.id}`, { active: !b.active }), b.active ? 'اتوقفت الإشارة' : 'اتفعّلت الإشارة')) reload(); } }, b.active ? 'إيقاف' : 'تفعيل'),
+          isAdmin && sureButton('حذف', 'تأكيد الحذف', async () => { if (await act(() => api('DELETE', `/api/admin/badges/${b.id}`), 'اتحذفت الإشارة')) reload(); }))));
+  };
+
+  fill(main, h('h2', null, 'الإشارات'),
+    h('p', { class: 'muted small' }, 'التلقائية بتتمنح للولد لوحدها أول ما يحقق الشرط. اليدوية بيمنحها الخادم من صفحة الولد. لو أوقفت إشارة، الأولاد اللي خدوها بيحتفظوا بيها.'),
+    edit && addCard(),
+    h('div', { class: 'stack' }, r.badges.map(item)));
+}
+
 async function contentAdminCard() {
   const first = await act(() => api('GET', '/api/admin/content'));
   if (!first) return null;

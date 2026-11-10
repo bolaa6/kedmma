@@ -320,3 +320,7 @@ body.staff { padding-block-end: calc(84px + env(safe-area-inset-bottom)); }
 .sdot.on { background: var(--star); }
 .cheer-card { background: linear-gradient(135deg, var(--good-soft), var(--surface)); border-color: var(--good); }
 .cheer { background: var(--surface-2); border-radius: 12px; padding: 8px 12px; }
+
+.bi-lg { font-size: 1.8rem; line-height: 1; }
+.card.off { opacity: .6; }
+.badge .btn { margin-top: 4px; }

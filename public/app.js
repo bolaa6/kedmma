@@ -233,13 +233,14 @@ function renderKid() {
   const tabs = [['week', 'أسبوعي', 'week'], ['quiz', 'المسابقة', 'trophy'], ['library', 'المكتبة', 'book'], ['stars', 'نجومي', 'star'], ['profile', 'بياناتي', 'user']];
   if (me.game_enabled) tabs.splice(2, 0, ['game', 'اللعبة', 'trophy']);
   const bar = h('nav', { class: 'tabbar', 'aria-label': 'التنقل' }, tabs.map(([id, label, ic]) =>
-    h('button', { type: 'button', 'data-tab': id, 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.openContest = null; renderKid(); } }, icon(ic), label)));
+    h('button', { type: 'button', 'data-tab': id, 'aria-current': state.tab === id ? 'page' : null, onclick: () => { state.tab = id; state.openContest = null; state.lessonView = null; renderKid(); } }, icon(ic), label)));
   const bd = me.birthday;
   const greet = bd && bd.is_today ? h('div', { class: 'bday-card' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic'); return c; })(),
     h('div', null, h('b', null, `كل سنة وإنت طيب يا ${firstName(me.user.name)}`), h('p', null, `النهارده عيد ميلادك، ودلوقتي عندك ${arYears(bd.turning)}. ربنا يفرّح قلبك ويبارك حياتك.`))) : null;
   fill(app, h('div', { class: 'wrap' }, header(me.user.name), greet), main, bar);
   refreshNews();
-  if (state.tab === 'week') kidWeek(main);
+  if (state.lessonView) { if (state.lessonView.list) kidLessons(main); else kidLesson(main, state.lessonView.id); }
+  else if (state.tab === 'week') kidWeek(main);
   else if (state.tab === 'quiz') kidQuiz(main);
   else if (state.tab === 'game') kidGame(main);
   else if (state.tab === 'library') mediaView(main, false);
@@ -374,11 +375,11 @@ async function kidWeek(main) {
       week.attendance.length > 0 && h('p', { class: 'muted small' }, `حضرت الاجتماع ${week.attendance.length} ${week.attendance.length > 2 ? 'مرات' : 'مرة'} الأسبوع ده، وخدت نجمة على كل مرة.`));
   };
   const box = h('div', { class: 'stack' });
-  const contentSlot = h('div'), streakSlot = h('div'), cheerSlot = h('div'), charSlot = h('div');
+  const contentSlot = h('div'), streakSlot = h('div'), cheerSlot = h('div'), charSlot = h('div'), lessonSlot = h('div');
   fill(main, 
     h('div', { class: 'stars-hero' }, (() => { const s = icon('star'); s.setAttribute('class', 'big'); return s; })(),
       h('div', null, starNum, h('span', { class: 'muted' }, 'مجموع نجومك'))),
-    charSlot, streakSlot, cheerSlot, contentSlot,
+    charSlot, lessonSlot, streakSlot, cheerSlot, contentSlot,
     (() => { const b = state.me.birthday; if (!b || b.is_today) return null;
       return h('div', { class: 'card row bday-row' }, (() => { const c = icon('cake'); c.setAttribute('class', 'bday-ic sm'); return c; })(),
         h('div', { class: 'grow' }, h('b', null, 'عمرك ' + ageText(b)), h('div', { class: 'muted small' }, `فاضل ${arDays(b.days_until)} على عيد ميلادك`))); })(),
@@ -390,8 +391,64 @@ async function kidWeek(main) {
     h('p', { class: 'muted small' }, 'علّم على صلاتك. وقراءة الإنجيل بتتسجل بعد ما تكتب اللي فهمته منها. تقدر تعدّل آخر أسبوعين بس.'));
   draw();
   loadStreak(); loadCheers();
+  api('GET', '/api/lessons').then((r) => { if (r.lessons.length) lessonSlot.replaceChildren(lessonTeaser(r.lessons)); }).catch(() => {});
   loadCharacter().then((c) => { if (c && c.promoted) celebrate(`لقب جديد يا ${firstName(state.me.user.name)}!`, `بقيت «${c.stage_name}»`); });
   api('GET', '/api/daily-content').then((c) => { if (c.item) contentSlot.replaceChildren(contentCard(c.item)); }).catch(() => {});
+}
+
+// ====================== الدروس (الولد) ======================
+const paragraphs = (t) => String(t || '').split(/\n+/).filter(Boolean).map((p) => h('p', { class: 'lesson-p' }, p));
+function lessonTeaser(list) {
+  const l = list[0];
+  return h('div', { class: 'card stack lesson-teaser' },
+    h('div', { class: 'row between' }, h('h3', null, 'درس الأسبوع'), l.read ? h('span', { class: 'pill good' }, 'قريته') : h('span', { class: 'pill star' }, 'نجمة')),
+    h('b', null, l.title),
+    h('div', { class: 'takeaway' }, h('span', { class: 'muted small' }, 'إيه الدرس؟'), h('p', null, l.takeaway)),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', type: 'button', onclick: () => { state.lessonView = { id: l.id }; renderKid(); } }, l.read ? 'اقرا الدرس تاني' : 'اقرا الدرس'),
+      list.length > 1 && h('button', { class: 'btn ghost', type: 'button', onclick: () => { state.lessonView = { list: true }; renderKid(); } }, 'كل الدروس')));
+}
+async function kidLessons(main) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', '/api/lessons'));
+  if (!r) return;
+  fill(main,
+    h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.lessonView = null; renderKid(); } }, 'رجوع'),
+    h('h2', null, 'كل الدروس'),
+    r.lessons.length ? h('div', { class: 'stack' }, r.lessons.map((l) => h('button', { class: 'card lesson-row', type: 'button', onclick: () => { state.lessonView = { id: l.id }; renderKid(); } },
+      h('div', { class: 'grow' }, h('b', null, l.title), h('div', { class: 'muted small' }, shortDate(l.created_at.slice(0, 10)))),
+      l.read ? h('span', { class: 'pill good' }, 'قريته') : h('span', { class: 'pill' }, 'جديد')))) : h('p', { class: 'muted' }, 'لسه مفيش دروس'));
+}
+async function kidLesson(main, id) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const l = await act(() => api('GET', '/api/lessons/' + id));
+  if (!l) { state.lessonView = null; return; }
+  const back = h('button', { class: 'btn ghost sm', type: 'button', style: 'justify-self:start', onclick: () => { state.lessonView = null; renderKid(); } }, 'رجوع');
+  let readBox;
+  if (l.read) {
+    readBox = h('div', { class: 'card stack' }, h('b', null, 'قريت الدرس ✓'), h('p', { class: 'muted small', style: 'margin:0' }, 'اللي كتبته:'), h('div', { class: 'read-note' }, l.note));
+  } else {
+    const note = h('textarea', { id: 'lnote', maxlength: 400, placeholder: 'اكتب بكلامك إيه اللي فهمته من الدرس...' });
+    const hint = h('span', { class: 'muted small' });
+    const save = h('button', { class: 'btn', type: 'button', disabled: true }, 'قريت الدرس (نجمة)');
+    const words = (t) => t.trim().split(/\s+/).filter(Boolean).length;
+    const check = () => { const n = note.value.trim(), left = 15 - n.length; const okN = n.length >= 15 && words(n) >= 3; save.disabled = !okN; hint.textContent = okN ? 'تمام، تقدر تسجّل' : left > 0 ? `باقي ${left} حرف على الأقل` : 'اكتب 3 كلمات على الأقل'; };
+    note.addEventListener('input', check); check();
+    save.addEventListener('click', async () => {
+      const res = await act(() => api('POST', `/api/lessons/${id}/read`, { note: note.value }));
+      if (!res) return;
+      celebrate(`برافو يا ${firstName(state.me.user.name)}!`, 'خدت نجمة على قراءة الدرس');
+      kidLesson(main, id);
+    });
+    readBox = h('div', { class: 'card stack' }, h('h3', null, 'إيه اللي فهمته؟'), note, hint, save);
+  }
+  fill(main, back,
+    h('div', { class: 'card stack lesson-card' },
+      h('h2', { style: 'margin:0' }, l.title),
+      h('div', { class: 'takeaway big' }, h('b', null, 'إيه الدرس؟'), h('p', null, l.takeaway)),
+      l.verse && h('blockquote', { class: 'lesson-verse' }, l.verse),
+      h('div', { class: 'lesson-body' }, paragraphs(l.body))),
+    readBox);
 }
 
 // رسم الشخصية: بتكبر وبيزيد عليها حاجات مع كل لقب (0 مبتدئ، 1 مجتهد، 2 بطل، 3 قدوة)
@@ -527,6 +584,7 @@ async function kidStars(main) {
       row('الاعتراف', s.confession, 'نجمة لكل شهر'),
       row('حضور الاجتماع', s.attendance, 'نجمة لكل مرة'),
       row('المسابقة', s.quiz, 'نجمة لكل درجة'),
+      row('الدروس', s.lesson || 0, 'نجمة لكل درس'),
       s.game > 0 && row('لعبة السلم والتعبان', s.game, 'نجمة لكل سؤال صح'),
       row('زيادة أو خصم من الخدام', s.adjust)),
     rankCard,
@@ -623,7 +681,7 @@ function renderStaff() {
   const me = state.me.user;
   if (!state.tab) state.tab = 'overview';
   const tabs = [['overview', 'المتابعة', 'week', 1], ['attendance', 'الحضور', 'check', 1], ['quiz', 'المسابقة', 'trophy', 1], ['library', 'المكتبة', 'book', 1],
-    ['reports', 'التقارير', 'chart', 0], ['ranking', 'الترتيب', 'podium', 0], ['badges', 'الإشارات', 'star', 0]];
+    ['reports', 'التقارير', 'chart', 0], ['ranking', 'الترتيب', 'podium', 0], ['badges', 'الإشارات', 'star', 0], ['lessons', 'الدروس', 'book', 0]];
   if (me.role === 'admin') tabs.push(['team', 'الخدام والإعدادات', 'tune', 0]);
   tabs.push(['me', 'حسابي', 'user', 0]);
   const go = (id) => { state.tab = id; state.openKid = null; state.staffContest = null; state.builder = null; state.openReport = null; renderStaff(); };
@@ -650,6 +708,7 @@ function renderStaff() {
   else if (state.tab === 'reports') staffReports(main);
   else if (state.tab === 'ranking') staffRanking(main);
   else if (state.tab === 'badges') staffBadges(main);
+  else if (state.tab === 'lessons') staffLessons(main);
   else if (state.tab === 'team') staffTeam(main);
   else staffMe(main);
 }
@@ -764,7 +823,7 @@ async function staffKid(main, id) {
         h('dt', null, 'الإخوات'), h('dd', null, p.siblings.length ? p.siblings.map((x) => h('div', null, `${x.name}${x.age ? ' - ' + x.age + ' سنة' : ''}${x.grade ? ' - ' + x.grade : ''}`)) : 'مفيش'))),
     h('div', { class: 'card stack' }, h('h3', null, 'النجوم'),
       h('div', { class: 'stats' },
-        [['الصلاة', s.prayer], ['الإنجيل', s.gospel], ['القداس', s.mass], ['الاعتراف', s.confession], ['الاجتماع', s.attendance], ['المسابقة', s.quiz], ['اللعبة', s.game || 0], ['زيادة/خصم', s.adjust]].map(([l, n]) =>
+        [['الصلاة', s.prayer], ['الإنجيل', s.gospel], ['القداس', s.mass], ['الاعتراف', s.confession], ['الاجتماع', s.attendance], ['المسابقة', s.quiz], ['الدروس', s.lesson || 0], ['اللعبة', s.game || 0], ['زيادة/خصم', s.adjust]].map(([l, n]) =>
           h('div', { class: 'stat' }, h('b', { class: 'num' }, String(n)), h('span', null, l))))),
     extrasSlot,
     h('div', { class: 'card stack' }, h('h3', null, 'آخر 4 أسابيع'),
@@ -1574,6 +1633,59 @@ function gameScreen(main, id) {
 }
 
 // ----- تحكم المسؤول في اللعبة -----
+// ====================== الدروس (الخدام والمسؤول) ======================
+async function staffLessons(main) {
+  fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));
+  const r = await act(() => api('GET', '/api/lessons'));
+  if (!r) return;
+  const edit = canMark(), isAdmin = state.me.user.role === 'admin';
+  const reload = () => staffLessons(main);
+  const field = (label, el) => h('label', { class: 'f' }, h('span', null, label), el);
+  const form = (l, done) => {
+    const title = h('input', { maxlength: 80, placeholder: 'مثال: زكا والشجرة' }); title.value = l ? l.title : '';
+    const takeaway = h('textarea', { maxlength: 300, class: 'short', placeholder: 'اكتبها في سطر أو اتنين، دي أهم حاجة الولد هيشوفها' }); takeaway.value = l ? l.takeaway : '';
+    const verse = h('textarea', { maxlength: 400, class: 'short', placeholder: 'الآية نفسها من غير المرجع (اختياري)' }); verse.value = l ? l.verse : '';
+    const body = h('textarea', { maxlength: 6000, class: 'tall', placeholder: 'اكتب الدرس أو القصة. سيب سطر فاضي بين كل فقرة والتانية.' }); body.value = l ? l.body : '';
+    const go = async () => {
+      const payload = { title: title.value, takeaway: takeaway.value, verse: verse.value, body: body.value };
+      const res = await act(() => l ? api('PATCH', `/api/staff/lessons/${l.id}`, payload) : api('POST', '/api/staff/lessons', payload), l ? 'اتحفظ التعديل' : 'اتنشر الدرس للأولاد');
+      if (res) done();
+    };
+    return h('div', { class: 'stack' }, field('عنوان الدرس', title), field('إيه الدرس؟ (الفكرة الأساسية)', takeaway), field('آية الدرس (اختياري)', verse), field('نص الدرس', body),
+      h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: go }, l ? 'حفظ التعديل' : 'نشر الدرس'));
+  };
+  const item = (l) => {
+    const slot = h('div');
+    const open = async () => {
+      if (slot.firstChild) return slot.replaceChildren();
+      const full = await act(() => api('GET', '/api/lessons/' + l.id));
+      if (full) slot.replaceChildren(form(full, reload));
+    };
+    const readersSlot = h('div');
+    const showReaders = async () => {
+      if (readersSlot.firstChild) return readersSlot.replaceChildren();
+      const x = await act(() => api('GET', `/api/staff/lessons/${l.id}/readers`));
+      if (!x) return;
+      readersSlot.replaceChildren(h('div', { class: 'list' }, x.kids.map((k) => h('div', { class: 'row between' },
+        h('span', null, k.name), k.read ? h('span', { class: 'pill good' }, 'قرا') : h('span', { class: 'pill' }, 'لسه')))));
+    };
+    return h('div', { class: 'card stack' + (l.hidden ? ' off' : '') },
+      h('div', { class: 'row between' }, h('div', null, h('b', null, l.title), h('div', { class: 'muted small' }, shortDate(l.created_at.slice(0, 10)) + (l.hidden ? ' · مخفي عن الأولاد' : ''))),
+        h('span', { class: 'pill' }, `${l.reads} قرا`)),
+      h('p', { class: 'muted small', style: 'margin:0' }, l.takeaway),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn ghost sm', type: 'button', onclick: showReaders }, 'مين قرا؟'),
+        edit && h('button', { class: 'btn ghost sm', type: 'button', onclick: open }, 'تعديل'),
+        edit && h('button', { class: 'btn ghost sm', type: 'button', onclick: async () => { if (await act(() => api('PATCH', `/api/staff/lessons/${l.id}`, { hidden: !l.hidden }), l.hidden ? 'الدرس ظهر للأولاد' : 'الدرس اتخفى')) reload(); } }, l.hidden ? 'إظهار' : 'إخفاء'),
+        isAdmin && sureButton('حذف', 'تأكيد الحذف', async () => { if (await act(() => api('DELETE', `/api/staff/lessons/${l.id}`), 'اتحذف الدرس')) reload(); })),
+      readersSlot, slot);
+  };
+  fill(main, h('h2', null, 'الدروس'),
+    h('p', { class: 'muted small' }, 'أي درس بتنشره بيظهر للأولاد على طول، وبيوصلهم إشعار لو مفعّلين التنبيهات. الولد بياخد نجمة لما يقرا الدرس ويكتب اللي فهمه.'),
+    edit && h('div', { class: 'card stack' }, h('h3', null, 'درس جديد'), form(null, reload)),
+    h('div', { class: 'stack' }, r.lessons.length ? r.lessons.map(item) : h('p', { class: 'muted' }, 'لسه ما فيش دروس')));
+}
+
 // إدارة الإشارات: المسؤول والخدام يضيفوا ويعدّلوا ويوقفوا، والمسؤول بس يحذف
 async function staffBadges(main) {
   fill(main, h('p', { class: 'muted' }, 'جاري التحميل...'));

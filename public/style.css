@@ -328,3 +328,17 @@ body.staff { padding-block-end: calc(84px + env(safe-area-inset-bottom)); }
 .char-card { display: flex; align-items: center; gap: 14px; background: linear-gradient(135deg, var(--primary-soft), var(--surface)); }
 .char-art { flex: none; }
 .char-art svg { display: block; width: 124px; height: 132px; }
+
+/* ===== الدروس ===== */
+.lesson-teaser { background: linear-gradient(135deg, var(--primary-soft), var(--surface)); }
+.takeaway { background: var(--star-soft); border: 1px solid var(--star); border-radius: 14px; padding: 10px 14px; }
+.takeaway p { margin: 2px 0 0; font-weight: 700; line-height: 1.8; }
+.takeaway.big { padding: 14px 16px; }
+.takeaway.big b { font-size: 1.05rem; }
+.takeaway.big p { font-size: 1.1rem; }
+.lesson-verse { margin: 0; padding: 10px 14px; border-inline-start: 4px solid var(--primary); background: var(--surface-2); border-radius: 10px; font-size: 1.05rem; line-height: 1.9; }
+.lesson-body { display: grid; gap: 10px; }
+.lesson-p { margin: 0; line-height: 2; font-size: 1.05rem; }
+.lesson-row { display: flex; align-items: center; gap: 10px; text-align: start; width: 100%; cursor: pointer; }
+textarea.short { min-height: 70px; }
+textarea.tall { min-height: 220px; }

@@ -1321,7 +1321,7 @@ const waLink = (phone, text) => {
 };
 function reportText(r, showNotes) {
   const of = (n, t) => `${n} من ${t}`;
-  const lines = [`السلام عليكم ورحمة الله، تقرير شهر ${monthLabel(r.month)} للولد ${r.kid ? r.kid.name : r.name}:`, '',
+  const lines = [`مساء الخير، تقرير شهر ${monthLabel(r.month)} للولد ${r.kid ? r.kid.name : r.name}:`, '',
     `- الصلاة: ${of(r.prayer, r.elapsed)} يوم`, `- قراءة الإنجيل: ${of(r.gospel, r.elapsed)} يوم`,
     `- القداس: ${r.mass} مرة`, `- الاعتراف: ${r.confession ? 'تم' : 'لم يتم بعد'}`,
     `- حضور الاجتماع: ${r.meetings ? of(r.attendance.length, r.meetings) + ' اجتماع' : 'لا توجد اجتماعات مسجلة'}`];

@@ -350,3 +350,9 @@ textarea.tall { min-height: 220px; }
 .lb-nav { position: fixed; top: 50%; transform: translateY(-50%); z-index: 51; width: 46px; height: 46px; border-radius: 50%; border: 0; background: rgba(255,255,255,.85); color: #1b3a5c; font-size: 2rem; line-height: 1; display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.3); }
 .lb-nav[hidden] { display: none; }
 .lb-prev { right: 10px; } .lb-next { left: 10px; }
+
+.pwbox { position: relative; display: block; }
+.pwbox input { width: 100%; padding-inline-end: 48px; }
+.pwbox .eye { position: absolute; inset-block: 0; inset-inline-end: 4px; width: 44px; border: 0; background: transparent; color: var(--ink-2); display: grid; place-items: center; cursor: pointer; border-radius: 10px; }
+.pwbox .eye svg { width: 22px; height: 22px; fill: currentColor; }
+.pwbox .eye:hover { color: var(--primary); }

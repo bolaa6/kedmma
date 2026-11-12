@@ -24,6 +24,18 @@ function put(el, kids) {
   }
 }
 function fill(el, ...kids) { el.replaceChildren(); put(el, kids); }
+// حقل كلمة السر بزرار عين: يدوس عليه يشوف اللي كتبه
+function withEye(input) {
+  const btn = h('button', { class: 'eye', type: 'button', 'aria-label': 'إظهار كلمة السر', 'aria-pressed': 'false', onclick: () => {
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.setAttribute('aria-pressed', String(show));
+    btn.setAttribute('aria-label', show ? 'إخفاء كلمة السر' : 'إظهار كلمة السر');
+    btn.replaceChildren(icon(show ? 'eyeoff' : 'eye'));
+    input.focus();
+  } }, icon('eye'));
+  return h('div', { class: 'pwbox' }, input, btn);
+}
 function icon(name) {
   const paths = {
     star: 'M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z',
@@ -40,6 +52,8 @@ function icon(name) {
     tune: 'M3 6h9v2H3zm13 0h5v2h-5zM12 4h2v6h-2zM3 11h5v2H3zm9 0h9v2h-9zM8 9h2v6H8zM3 16h11v2H3zm15 0h3v2h-3zM14 14h2v6h-2z',
     more: 'M5 10.2a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6zm7 0a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6zm7 0a1.8 1.8 0 100 3.6 1.8 1.8 0 000-3.6z',
     lesson: 'M6 2h9l5 5v15H6zm8 1.5V8h4.5zM8.5 12h8v1.6h-8zm0 3.4h8V17h-8zM8.5 8.6h4V10h-4z',
+    eye: 'M12 5C6.5 5 2.5 9.2 1 12c1.5 2.8 5.5 7 11 7s9.5-4.2 11-7c-1.5-2.8-5.5-7-11-7zm0 11.5a4.5 4.5 0 110-9 4.5 4.5 0 010 9zm0-7a2.5 2.5 0 100 5 2.5 2.5 0 000-5z',
+    eyeoff: 'M3.3 2L2 3.3l3 3C3.4 7.5 2 9.5 1 12c1.5 2.8 5.5 7 11 7 1.9 0 3.6-.5 5.1-1.2l3.6 3.6 1.3-1.3zM12 16.5a4.5 4.5 0 01-4.4-5.4l1.9 1.9a2.5 2.5 0 002.9 2.9l1.9 1.9c-.7.4-1.5.6-2.3.6zM12 5c-1.1 0-2.1.2-3.1.5l2.2 2.2a4.5 4.5 0 015.2 5.2l3.3 3.3C21 14.8 22.3 13.3 23 12c-1.5-2.8-5.5-7-11-7z',
     moon: 'M20.5 14.5A8.5 8.5 0 019.5 3.5 8.5 8.5 0 1020.5 14.5z',
     sun: 'M12 7a5 5 0 100 10 5 5 0 000-10zM11 1h2v3h-2zm0 19h2v3h-2zM1 11h3v2H1zm19 0h3v2h-3zM4.2 5.6l1.4-1.4 2.1 2.1-1.4 1.4zm12.1 12.1l1.4-1.4 2.1 2.1-1.4 1.4zM5.6 19.8l-1.4-1.4 2.1-2.1 1.4 1.4zM17.7 7.7l-1.4-1.4 2.1-2.1 1.4 1.4z',
   };
@@ -177,7 +191,7 @@ function showAuth(mode = 'login') {
     } },
       current === 'register' && h('label', { class: 'f', for: 'name' }, h('span', null, 'اسمك بالكامل'), name),
       h('label', { class: 'f', for: 'phone' }, h('span', null, 'رقم موبايلك ', h('small', null, current === 'register' ? '(هو اللي هتدخل بيه كل مرة)' : '')), phone),
-      h('label', { class: 'f', for: 'pw' }, h('span', null, 'كلمة السر ', h('small', null, current === 'register' ? '(6 حروف أو أرقام على الأقل)' : '')), pw),
+      h('label', { class: 'f', for: 'pw' }, h('span', null, 'كلمة السر ', h('small', null, current === 'register' ? '(6 حروف أو أرقام على الأقل)' : '')), withEye(pw)),
       err,
       h('button', { class: 'btn block', type: 'submit' }, current === 'login' ? 'دخول' : 'إنشاء الحساب'));
     fill(box, 
@@ -220,8 +234,8 @@ function passwordCard() {
     if (r) { old.value = ''; nw.value = ''; }
   } },
     h('h3', null, 'تغيير كلمة السر'),
-    h('label', { class: 'f', for: 'oldpw' }, h('span', null, 'كلمة السر الحالية'), old),
-    h('label', { class: 'f', for: 'newpw' }, h('span', null, 'كلمة السر الجديدة'), nw),
+    h('label', { class: 'f', for: 'oldpw' }, h('span', null, 'كلمة السر الحالية'), withEye(old)),
+    h('label', { class: 'f', for: 'newpw' }, h('span', null, 'كلمة السر الجديدة'), withEye(nw)),
     h('button', { class: 'btn', type: 'submit' }, 'حفظ'));
 }
 
@@ -1417,7 +1431,7 @@ function showForcedChange() {
     } },
       h('p', { class: 'muted' }, 'دخلت بكلمة سر مؤقتة. اكتب الكلمة المؤقتة وبعدها كلمة سر جديدة تفتكرها.'),
       h('label', { class: 'f', for: 'fcold' }, h('span', null, 'كلمة السر المؤقتة'), old),
-      h('label', { class: 'f', for: 'fcnew' }, h('span', null, 'كلمة السر الجديدة ', h('small', null, '(6 على الأقل)')), nw), err,
+      h('label', { class: 'f', for: 'fcnew' }, h('span', null, 'كلمة السر الجديدة ', h('small', null, '(6 على الأقل)')), withEye(nw)), err,
       h('button', { class: 'btn block', type: 'submit' }, 'حفظ ودخول'),
       h('button', { class: 'btn ghost block', type: 'button', onclick: logout }, 'تسجيل الخروج'))));
 }

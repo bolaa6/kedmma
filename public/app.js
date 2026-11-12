@@ -150,7 +150,7 @@ function themeButton() {
 function header(sub) {
   return h('header', { class: 'top' },
     h('div', { class: 'brand' },
-      h('div', { class: 'mark' }, icon('cross')),
+      h('img', { class: 'mark', src: '/icons/logo.svg', alt: '', width: 38, height: 38 }),
       h('div', { style: 'min-width:0' }, h('b', null, 'متابعة مدارس الأحد'), h('span', null, sub))),
     h('div', { class: 'row' }, themeButton()));
 }
@@ -191,7 +191,7 @@ function showAuth(mode = 'login') {
   };
   draw();
   fill(app, h('main', { class: 'auth' },
-    h('div', { class: 'hero' }, h('div', { class: 'mark' }, icon('cross')),
+    h('div', { class: 'hero' }, h('img', { class: 'mark', src: '/icons/logo.svg', alt: '', width: 72, height: 72 }),
       h('h1', null, 'متابعة مدارس الأحد'), h('p', { class: 'muted' }, 'سنة خامسة ابتدائي - أولاد')),
     h('div', { class: 'card' }, box),
     h('div', { class: 'row', style: 'justify-content:center' }, themeButton())));
@@ -1392,7 +1392,7 @@ function showForgot() {
   const msg = h('div', { class: 'notice', hidden: true });
   const err = h('div', { class: 'err', hidden: true, role: 'alert' });
   fill(app, h('main', { class: 'auth' },
-    h('div', { class: 'hero' }, h('div', { class: 'mark' }, icon('cross')), h('h1', null, 'نسيت كلمة السر')),
+    h('div', { class: 'hero' }, h('img', { class: 'mark', src: '/icons/logo.svg', alt: '', width: 72, height: 72 }), h('h1', null, 'نسيت كلمة السر')),
     h('form', { class: 'card stack', novalidate: true, onsubmit: async (e) => {
       e.preventDefault(); err.hidden = true;
       try { await api('POST', '/api/forgot', { phone: phone.value }); msg.textContent = 'وصل طلبك للمسؤول. هيبعتلك كلمة سر مؤقتة، وبعد ما تدخل بيها هتختار كلمة جديدة.'; msg.hidden = false; }
@@ -1408,7 +1408,7 @@ function showForcedChange() {
   const nw = h('input', { id: 'fcnew', type: 'password', autocomplete: 'new-password', minlength: 6, required: true });
   const err = h('div', { class: 'err', hidden: true, role: 'alert' });
   fill(app, h('main', { class: 'auth' },
-    h('div', { class: 'hero' }, h('div', { class: 'mark' }, icon('cross')), h('h1', null, 'اختار كلمة سر جديدة')),
+    h('div', { class: 'hero' }, h('img', { class: 'mark', src: '/icons/logo.svg', alt: '', width: 72, height: 72 }), h('h1', null, 'اختار كلمة سر جديدة')),
     h('form', { class: 'card stack', novalidate: true, onsubmit: async (e) => {
       e.preventDefault(); err.hidden = true;
       try { await api('POST', '/api/password', { old: old.value, password: nw.value }); toast('تم تغيير كلمة السر'); await boot(); }

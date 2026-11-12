@@ -1834,17 +1834,33 @@ async function resizeTo(file, maxSide, quality) {
   return c.toDataURL('image/jpeg', quality);
 }
 
-function lightbox(p, canDel, reload) {
+function lightbox(list, start, canDel, reload) {
+  let i = start;
   const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
-  const ov = h('div', { class: 'lightbox', role: 'dialog', 'aria-modal': 'true', 'aria-label': p.title || 'صورة', onclick: (e) => { if (e.target === ov) close(); } },
-    h('div', { class: 'lb-box' },
+  // الاتجاه عربي: الصورة اللي بعدها على الشمال، واللي قبلها على اليمين
+  const go = (d) => { const n = i + d; if (n < 0 || n >= list.length) return; i = n; draw(); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowLeft') go(1); else if (e.key === 'ArrowRight') go(-1); };
+  const box = h('div', { class: 'lb-box' });
+  const prev = h('button', { class: 'lb-nav lb-prev', type: 'button', 'aria-label': 'الصورة السابقة', onclick: (e) => { e.stopPropagation(); go(-1); } }, '›');
+  const next = h('button', { class: 'lb-nav lb-next', type: 'button', 'aria-label': 'الصورة التالية', onclick: (e) => { e.stopPropagation(); go(1); } }, '‹');
+  const ov = h('div', { class: 'lightbox', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'عرض الصور', onclick: (e) => { if (e.target === ov || e.target === box) close(); } }, box, prev, next);
+  let x0 = null;
+  ov.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  ov.addEventListener('touchend', (e) => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); }, { passive: true });
+  function draw() {
+    const p = list[i];
+    prev.hidden = i === 0; next.hidden = i === list.length - 1;
+    ov.setAttribute('aria-label', p.title || 'صورة');
+    fill(box,
       h('img', { src: `/api/gallery/${p.id}/full`, alt: p.title || 'صورة من المعرض' }),
       p.title && h('b', null, p.title),
+      h('span', { class: 'muted small', style: 'color:#ddd' }, `${i + 1} من ${list.length}`),
       h('div', { class: 'row', style: 'justify-content:center' },
         h('a', { class: 'btn', href: `/api/gallery/${p.id}/full?dl=1`, download: `photo-${p.id}.jpg`, style: 'text-decoration:none' }, 'تحميل الصورة'),
         canDel && sureButton('حذف', 'تأكيد الحذف', async () => { const x = await act(() => api('DELETE', `/api/gallery/${p.id}`), 'تم الحذف'); if (x) { close(); reload(); } }),
-        h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'إغلاق'))));
+        h('button', { class: 'btn ghost', type: 'button', onclick: close }, 'إغلاق')));
+  }
+  draw();
   document.addEventListener('keydown', onKey);
   document.body.append(ov);
 }
@@ -1871,7 +1887,7 @@ async function galleryView(box, canAdd) {
       h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: () => pick.click() }, 'اختار صور من الموبايل'), pick, status,
       h('p', { class: 'muted small' }, 'تقدر تختار أكتر من صورة مرة واحدة. الصور بتتصغّر تلقائيًا عشان الموقع يفضل سريع.')) : null;
     fill(box, form, r.photos.length ? h('div', { class: 'gallery' }, r.photos.map((p) =>
-      h('button', { class: 'g-item', type: 'button', 'aria-label': p.title || 'فتح الصورة', onclick: () => lightbox(p, canAdd, load) },
+      h('button', { class: 'g-item', type: 'button', 'aria-label': p.title || 'فتح الصورة', onclick: () => lightbox(r.photos, r.photos.indexOf(p), canAdd, load) },
         h('img', { src: `/api/gallery/${p.id}/thumb`, alt: p.title || '', loading: 'lazy' }), p.title && h('span', null, p.title))))
       : h('div', { class: 'card' }, h('p', { class: 'muted' }, canAdd ? 'لسه ما رفعتش صور. اضغط "اختار صور" من فوق.' : 'مفيش صور لسه. هتظهر هنا لما الخدام يرفعوها.')));
   };

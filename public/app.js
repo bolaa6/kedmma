@@ -933,6 +933,7 @@ async function staffTeam(main) {
     h('div', { class: 'card stack' }, h('h3', null, 'بيانات الأولاد'),
       h('p', { class: 'muted' }, 'تنزيل ملف Excel فيه بيانات كل الأولاد وأرقام أهاليهم ومجموع نجومهم.'),
       h('a', { class: 'btn', href: '/api/admin/export.csv', style: 'text-decoration:none;justify-self:start' }, 'تنزيل الملف')),
+    await backupCard(),
     auditCard(),
     h('p', { class: 'muted small' }, 'لتغيير كلمة سر ولد: افتح الولد من "متابعة الأسبوع" واستخدم خانة تغيير كلمة السر.'));
 }
@@ -1903,3 +1904,21 @@ async function levelCard() {
 }
 
 boot().catch(() => showAuth());
+
+// ====================== النسخة الاحتياطية والمساحة ======================
+async function backupCard() {
+  const r = await act(() => api('GET', '/api/admin/storage'));
+  if (!r) return h('div');
+  const mb = (b) => (b / 1048576).toFixed(b < 1048576 * 10 ? 1 : 0) + ' MB';
+  const days = r.last_backup ? Math.floor((Date.now() - new Date(r.last_backup).getTime()) / 864e5) : null;
+  const old = days === null || days > 30;
+  return h('div', { class: 'card stack' }, h('h3', null, 'النسخة الاحتياطية والمساحة'),
+    h('div', { class: 'row between' }, h('span', null, 'المساحة المستخدمة' + (r.estimated ? ' (تقدير للصور فقط)' : '')), h('b', { class: 'num', dir: 'ltr' }, `${mb(r.used)} / ${mb(r.limit)}`)),
+    h('div', { class: 'progress' + (r.percent >= 80 ? ' warn' : ''), role: 'progressbar', 'aria-valuenow': String(r.percent), 'aria-valuemin': '0', 'aria-valuemax': '100' }, h('i', { style: `width:${Math.max(2, r.percent)}%` })),
+    h('p', { class: 'muted small' }, `معرض الصور: ${r.gallery.count} صورة (${mb(r.gallery.bytes)}) - صور الأولاد الشخصية: ${r.profile_photos.count} (${mb(r.profile_photos.bytes)})`),
+    r.percent >= 80 && h('p', { class: 'notice' }, 'المساحة قربت تخلص. امسح صور قديمة من المعرض.'),
+    h('p', null, 'آخر نسخة احتياطية: ', h('b', null, r.last_backup ? `${days === 0 ? 'النهارده' : 'من ' + days + ' يوم'}` : 'لسه مفيش')),
+    old && h('p', { class: 'notice' }, 'يفضل تاخد نسخة احتياطية مرة في الشهر على الأقل.'),
+    h('a', { class: 'btn', href: '/api/admin/backup', style: 'text-decoration:none;justify-self:start' }, 'تنزيل نسخة احتياطية كاملة'),
+    h('p', { class: 'muted small' }, 'الملف فيه بيانات الأولاد وأرقام أهاليهم. احفظه في مكان آمن ومتشاركوش مع حد. صور المعرض بتتنزّل منه بشكل منفصل.'));
+}
